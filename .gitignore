@@ -1,0 +1,29 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+backend/.env
+frontend-xapobank/.env
+.env.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+
+# Editor folders
+.vscode/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Misc
+.env.test
+.cache/

@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "builds": [{ "src": "frontend-xapobank/**", "use": "@vercel/static" }],
+  "routes": [
+    { "src": "/", "dest": "/frontend-xapobank/signsignup/index.html" },
+    { "src": "^/(.*)$", "dest": "/frontend-xapobank/$1" }
+  ]
+}
