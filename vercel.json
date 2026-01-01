@@ -7,12 +7,17 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "https://backend-wnsn.onrender.com/api/$1" },
     { "src": "/socket.io/(.*)", "dest": "https://backend-wnsn.onrender.com/socket.io/$1" },
+    { "src": "/admin", "dest": "/transaction-admin-site/admin.html" },
     { "src": "/admin/(.*)", "dest": "/transaction-admin-site/$1" },
     { "src": "/signsignup/(.*)", "dest": "/frontend-xapobank/$1" },
     { "src": "/signin.html", "dest": "/frontend-xapobank/signin.html" },
     { "src": "/signup.html", "dest": "/frontend-xapobank/signup.html" },
     { "src": "/", "dest": "/frontend-xapobank/index.html" },
     { "src": "/(.*)", "dest": "/frontend-xapobank/$1" }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://backend-wnsn.onrender.com/api/$1" },
+    { "source": "/socket.io/(.*)", "destination": "https://backend-wnsn.onrender.com/socket.io/$1" }
   ]
 }
  
