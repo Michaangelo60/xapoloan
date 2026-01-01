@@ -5,8 +5,9 @@
   ],
   "routes": [
     { "src": "/api/(.)", "dest": "https://backend-wnsn.onrender.com/api/$1" },
-    { "src": "/socket.io/(.)", "dest": "/frontend-xapobank" }
+    { "src": "/socket.io/(.)", "dest": "/frontend-xapobank/signup.html/$1" }
   ]
 }
  
+
 
