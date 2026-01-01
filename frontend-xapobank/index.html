@@ -491,7 +491,7 @@
       try {
         const token = localStorage.getItem('token') || '';
         if (!token) return;
-        const res = await fetch('http://localhost:5000/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
         if (!res.ok) return;
         const j = await res.json().catch(() => ({}));
         const userData = j.data || j.user || (j.isOk && j.data) || (j.success && j.data) || j;
@@ -1021,7 +1021,7 @@
         input.value = '';
         appendMessage(text, 'me');
         try {
-          const res = await fetch('http://localhost:5000/api/support', {
+          const res = await fetch('/api/support', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
             body: JSON.stringify({ message: text, subject: 'Live chat message' })
           });
@@ -1620,7 +1620,7 @@
 
         try {
           const token = localStorage.getItem('token') || '';
-          const res = await fetch('http://localhost:5000/api/transactions', {
+          const res = await fetch('/api/transactions', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify(transaction)
           });
@@ -1634,7 +1634,7 @@
 
               // Refresh local user profile so balances reflect server-applied changes
               try {
-                const meRes = await fetch('http://localhost:5000/api/auth/me', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') } });
+                const meRes = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') } });
                 if (meRes.ok) {
                   const mej = await meRes.json().catch(() => ({}));
                   const userData = mej.data || mej.user || mej;
@@ -3294,7 +3294,7 @@
           uploadPassportBtn.addEventListener('click', async () => {
             if (!passportDataUrl) return alert('Please select a passport image first');
             try {
-              const res = await fetch('http://localhost:5000/api/identity/upload', {
+              const res = await fetch('/api/identity/upload', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
                 body: JSON.stringify({ type: 'passport', data: passportDataUrl })
               });
@@ -3339,7 +3339,7 @@
             const dataUrl = livePreviewEl && livePreviewEl.dataset && livePreviewEl.dataset.photo;
             if (!dataUrl) return alert('No captured photo available. Capture first.');
             try {
-              const res = await fetch('http://localhost:5000/api/identity/upload', {
+              const res = await fetch('/api/identity/upload', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
                 body: JSON.stringify({ type: 'live', data: dataUrl })
               });
@@ -3461,7 +3461,7 @@
           const message = prompt('Please enter a short message for support:');
           if (!message) return;
           try {
-            const res = await fetch('http://localhost:5000/api/support', {
+            const res = await fetch('/api/support', {
               method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
               body: JSON.stringify({ message, subject: defaultSubject, from: user.email, name: user.name })
             });
@@ -3531,7 +3531,7 @@
           const originalText = saveProfileDashboardBtn.textContent;
 
           try {
-            const res = await fetch('http://localhost:5000/api/auth/me', {
+            const res = await fetch('/api/auth/me', {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
               body: JSON.stringify({ name: name, email: email, phone: phone, country: country })
@@ -3779,7 +3779,7 @@
             // If no token, redirect to signin page
             window.location.href = '/signsignup/signin.html';
         } else {
-            fetch('http://localhost:5000/api/auth/me', {
+            fetch('/api/auth/me', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3831,7 +3831,7 @@
     return;
   }
   // optional: verify token by calling a protected endpoint and store user
-  fetch('http://localhost:5000/api/auth/me', {
+  fetch('/api/auth/me', {
     headers: { Authorization: 'Bearer ' + token }
   }).then(async r=>{
     if (!r.ok) {
