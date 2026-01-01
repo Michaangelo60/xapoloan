@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0ea5e9">
   <title>Sign Up - Xapo Bank</title>
-  <link rel="icon" href="/xapo_logo.svg" type="image/svg+xml">
+  <link rel="icon" href="/IMG_2730.PNG" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/xapo_logo.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -17,7 +17,7 @@
     <section class="bg-black rounded-2xl shadow-lg card mx-auto border border-black">
       <div class="p-6 sm:p-8">
         <header class="mb-6 text-center">
-         <img src="/IMG_2730.PNG" alt="Xapo Bank" class="mx-auto h-10 w-auto mb-3" onerror="this.style.display='none'">
+         <img src="/xapo_logo.svg" alt="Xapo Bank" class="mx-auto h-10 w-auto mb-3" onerror="this.style.display='none'">
           <h1 class="text-2xl font-semibold text-slate-100">Create your account</h1>
           <p class="text-sm text-slate-400 mt-1">Fast, secure sign up on mobile and tablet</p>
         </header>
@@ -747,8 +747,8 @@ Our Agreement supersedes and extinguishes all previous agreements, promises, ass
           const pop = document.getElementById('signup-success');
           const cont = document.getElementById('signup-continue');
           if (pop) pop.classList.remove('hidden');
-          // Continue button redirects immediately to dashboard
-          const dashboardPath = '/frontend-xapobank/index.html';
+          // Continue button redirects immediately to dashboard (use root for Vercel)
+          const dashboardPath = '/';
           if (cont) cont.addEventListener('click', () => { window.location.href = dashboardPath; });
           // Auto-redirect after 2.5s
           setTimeout(() => { window.location.href = dashboardPath; }, 2500);
