@@ -62,7 +62,26 @@
     }
   </style>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function(){
+      function loadScript(src, cb){
+        var s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = function(){ try { if (cb) cb(); } catch(e){} };
+        s.onerror = function(){ /* ignore */ };
+        document.head.appendChild(s);
+      }
+
+      // Try same-origin socket path first (Vercel proxy). If unavailable, fall back to CDN.
+      loadScript('/socket.io/socket.io.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
+      setTimeout(function(){
+        if (typeof io === 'undefined') {
+          loadScript('https://cdn.socket.io/4.6.1/socket.io.min.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
+        }
+      }, 900);
+    })();
+  </script>
   <script src="/_sdk/edit_panel_sdk.js"></script>
   <style>@view-transition { navigation: auto; }</style>
  </head>
@@ -3661,7 +3680,7 @@
       render();
     });
     // Setup Socket.IO client for real-time transaction updates
-    (function setupSocket(){
+    function setupSocket(){
       try {
         const token = localStorage.getItem('token');
         const socket = io({ auth: { token } });
@@ -3745,7 +3764,14 @@
       } catch (e) {
         console.warn('Socket init failed', e);
       }
-    })();
+    }
+
+    // Initialize when the socket.io client library is available.
+    if (typeof io !== 'undefined') {
+      try { setupSocket(); } catch (e) { console.warn('setupSocket immediate failed', e); }
+    } else {
+      window.__onSocketIoReady = window.__onSocketIoReady || function(){ try { setupSocket(); } catch(e){} };
+    }
     document.addEventListener('DOMContentLoaded', function() {
         const token = localStorage.getItem('token');
 
