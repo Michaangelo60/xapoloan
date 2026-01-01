@@ -7,7 +7,24 @@
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const query = user && user.id ? `?userId=${encodeURIComponent(user.id)}` : '';
-        const res = await fetch('/api/transactions' + query, {
+        // Try same-origin (Vercel proxy) first, fall back to explicit backend URL if network fails
+        async function tryFetch(path, opts){
+          try {
+            const r = await fetch(path, opts);
+            return r;
+          } catch (e) {
+            // network-level failure (CORS, DNS, offline) - try Render backend explicitly
+            try {
+              const fallback = 'https://backend-wnsn.onrender.com' + path;
+              const r2 = await fetch(fallback, opts);
+              return r2;
+            } catch (e2) {
+              throw e2;
+            }
+          }
+        }
+
+        const res = await tryFetch('/api/transactions' + query, {
           headers: {
             ...(token ? { Authorization: 'Bearer ' + token } : {})
           }
@@ -32,7 +49,7 @@
           transaction.userEmail = transaction.userEmail || user.email;
           transaction.userName = transaction.userName || user.name;
         }
-        const res = await fetch('/api/transactions', {
+        const res = await tryFetch('/api/transactions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
