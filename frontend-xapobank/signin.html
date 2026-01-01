@@ -70,6 +70,19 @@
   </main>
 
   <script>
+    // tryFetch: attempt same-origin first, fall back to explicit backend URL
+    async function tryFetch(path, opts){
+      try {
+        return await fetch(path, opts);
+      } catch (e) {
+        try {
+          const fallback = 'https://backend-wnsn.onrender.com' + path;
+          return await fetch(fallback, opts);
+        } catch (e2) {
+          throw e2;
+        }
+      }
+    }
     // Toggle password visibility
     const toggleBtn = document.getElementById('toggle-password');
     const passwordInput = document.getElementById('password');
@@ -95,7 +108,7 @@
         if (!email) return;
       }
       try {
-        const res = await fetch('/api/auth/forgot', {
+        const res = await tryFetch('/api/auth/forgot', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
@@ -124,7 +137,7 @@
       };
 
       try {
-        const response = await fetch('/api/auth/login', {
+        const response = await tryFetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
