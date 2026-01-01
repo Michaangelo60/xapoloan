@@ -28,6 +28,7 @@
         
         </header>
 
+        <div id="signin-error" class="hidden mb-4 text-sm text-red-400"></div>
         <form id="signin-form" class="space-y-4" autocomplete="on">
           <div>
                      <label for="email" class="block text-sm font-medium text-slate-300 mb-1">Email</label>
@@ -133,10 +134,16 @@
         if (response.ok) {
           localStorage.setItem('token', data && data.token ? data.token : '');
           try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
-          window.location.href = './index.html';
+          window.location.href = '/';
         } else {
-          const msg = (data && (data.message || data.error)) ? (data.message || data.error) : `Sign-in failed (${response.status})`;
-          alert(msg);
+          const msg = (data && (data.message || data.error)) ? (data.message || data.error) : (response.statusText || `Sign-in failed (${response.status})`);
+          const errDiv = document.getElementById('signin-error');
+          if (errDiv) {
+            errDiv.textContent = msg;
+            errDiv.classList.remove('hidden');
+          } else {
+            alert(msg);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -149,5 +156,4 @@
     });
   </script>
 </body>
-
 </html>
