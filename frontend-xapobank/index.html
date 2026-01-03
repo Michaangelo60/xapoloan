@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>xapobank</title>
-  <link rel="icon" href="/IMG_2730.PNG" type="image/png">
-  <link rel="apple-touch-icon" href="/IMG_2730.PNG">
-  <script src="/_sdk/element_sdk.js"></script>
-  <script src="/_sdk/data_sdk.js"></script>
+  <link rel="icon" href="IMG_2730.PNG" type="image/png">
+  <link rel="apple-touch-icon" href="IMG_2730.PNG">
+  <script src="_sdk/element_sdk.js"></script>
+  <script src="_sdk/data_sdk.js"></script>
   <style>
     body {
       box-sizing: border-box;
@@ -62,7 +62,7 @@
     }
   </style>
   <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/config.js"></script>
+  <script src="/config.js"></script>
   <script>
     // If the user is not authenticated, redirect to signup page on static deploys.
     (function(){
@@ -89,7 +89,7 @@
       }
 
       // Try same-origin socket path first (Vercel proxy). If unavailable, fall back to CDN.
-      loadScript('/socket.io/socket.io.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
+      loadScript('socket.io/socket.io.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
       setTimeout(function(){
         if (typeof io === 'undefined') {
           loadScript('https://cdn.socket.io/4.6.1/socket.io.min.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
@@ -97,7 +97,7 @@
       }, 900);
     })();
   </script>
-  <script src="/_sdk/edit_panel_sdk.js"></script>
+  <script src="_sdk/edit_panel_sdk.js"></script>
   <style>@view-transition { navigation: auto; }</style>
  </head>
  <body class="h-full w-full">
@@ -351,6 +351,59 @@
       }
     };
 
+    // Local simulated loans helpers: store client-side loans so dashboard reflects immediate applications
+    function getLocalSimLoans() {
+      try { return JSON.parse(localStorage.getItem('localSimLoans') || '[]'); } catch (e) { return []; }
+    }
+    function showOrUpdateNotice(id, html, timeoutMs) {
+      try {
+        const existing = document.getElementById(id);
+        if (existing) {
+          existing.innerHTML = html;
+        } else {
+          const notice = document.createElement('div');
+          notice.id = id;
+          notice.style.position = 'fixed';
+          notice.style.top = '12px';
+          notice.style.left = '50%';
+          notice.style.transform = 'translateX(-50%)';
+          notice.style.zIndex = 1200;
+          notice.style.background = '#111827';
+          notice.style.color = '#e5e7eb';
+          notice.style.padding = '10px 14px';
+          notice.style.border = '1px solid #374151';
+          notice.style.borderRadius = '8px';
+          notice.style.boxShadow = '0 6px 18px rgba(0,0,0,0.5)';
+          notice.innerHTML = html;
+          document.body.appendChild(notice);
+          if (timeoutMs && timeoutMs > 0) setTimeout(() => { const n = document.getElementById(id); if (n) n.remove(); }, timeoutMs);
+        }
+      } catch (e) { console.warn('showOrUpdateNotice failed', e); }
+    }
+    function saveLocalSimLoan(tx) {
+      try {
+        const cur = getLocalSimLoans();
+        cur.push(tx);
+        localStorage.setItem('localSimLoans', JSON.stringify(cur));
+      } catch (e) { console.warn('saveLocalSimLoan failed', e); }
+    }
+    function removeLocalSimLoanByTransactionId(txId) {
+      try {
+        const cur = getLocalSimLoans().filter(t => String(t.transactionId || t._id || '') !== String(txId || ''));
+        localStorage.setItem('localSimLoans', JSON.stringify(cur));
+      } catch (e) { console.warn('removeLocalSimLoan failed', e); }
+    }
+    function syncLocalLoansToAllTransactions() {
+      try {
+        const local = getLocalSimLoans();
+        if (!Array.isArray(local) || local.length === 0) return;
+        local.forEach(l => {
+          const exists = allTransactions.find(t => (t.transactionId && l.transactionId && String(t.transactionId) === String(l.transactionId)) || (t._id && l._id && String(t._id) === String(l._id)));
+          if (!exists) allTransactions.unshift(l);
+        });
+      } catch (e) { console.warn('syncLocalLoansToAllTransactions failed', e); }
+    }
+
      document.addEventListener('DOMContentLoaded', () => {
       // It's likely the UI is built after the DOM is loaded.
       // We will try to add the button after a short delay to ensure the sidebar is rendered.
@@ -399,37 +452,54 @@
             const deposits = allTransactions.filter(t => String(t.type||'').toLowerCase() === 'deposit');
             const completedDeposits = deposits.filter(d => ['completed','confirmed','complete'].includes(String(d.status||'').toLowerCase()));
             totalCollateral = completedDeposits.reduce((sum, t) => sum + ((Number(t.collateralBTC || 0) * 86406)), 0);
-            const completedDepositsSum = completedDeposits.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
+            const btcPrice = (typeof getCurrentBTCPrice === 'function') ? getCurrentBTCPrice() : 86406;
+            const collateralDeposits = completedDeposits.filter(d => (Number(d.collateralBTC || 0) > 0) || String(d.description || '').toLowerCase().includes('collateral'));
+            const collateralUSD = collateralDeposits.reduce((s, d) => s + (Number(d.amount || 0) || (Number(d.collateralBTC || 0) * btcPrice)), 0);
+            const savingsDeposits = completedDeposits.filter(d => !((Number(d.collateralBTC || 0) > 0) || String(d.description || '').toLowerCase().includes('collateral')));
+            const savingsDepositsSum = savingsDeposits.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
             const withdrawals = allTransactions.filter(t => String(t.type||'').toLowerCase() === 'withdrawal');
             const completedWithdrawals = withdrawals.filter(w => ['completed','confirmed','complete'].includes(String(w.status||'').toLowerCase()));
             const totalWithdrawals = completedWithdrawals.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
-            walletBalance = completedDepositsSum - totalWithdrawals;
+            // Wallet balance should only include non-collateral (savings) deposits minus withdrawals
+            walletBalance = savingsDepositsSum - totalWithdrawals;
+            // Use collateralUSD for collateral total
+            totalCollateral = collateralUSD;
           }
         } else {
-          const deposits = allTransactions.filter(t => t.type === 'deposit');
-          const withdrawals = allTransactions.filter(t => t.type === 'withdrawal');
-          const loans = allTransactions.filter(t => t.type === 'loan');
+          const deposits = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit');
+          const withdrawals = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'withdrawal');
+          const loans = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'loan');
 
           // Only include completed transactions when calculating effective balances
           const completedDeposits = deposits.filter(d => ['completed','confirmed','complete'].includes(String(d.status || '').toLowerCase()));
           const completedWithdrawals = withdrawals.filter(w => ['completed','confirmed','complete'].includes(String(w.status || '').toLowerCase()));
 
-          const totalDeposits = completedDeposits.reduce((sum, t) => sum + (t.amount || 0), 0);
-          const totalWithdrawals = completedWithdrawals.reduce((sum, t) => sum + (t.amount || 0), 0);
+          const btcPrice = (typeof getCurrentBTCPrice === 'function') ? getCurrentBTCPrice() : 86406;
+          const collateralDeposits = completedDeposits.filter(d => (Number(d.collateralBTC || 0) > 0) || String(d.description || '').toLowerCase().includes('collateral'));
+          const collateralUSD = collateralDeposits.reduce((s, d) => s + (Number(d.amount || 0) || (Number(d.collateralBTC || 0) * btcPrice)), 0);
+          const savingsDeposits = completedDeposits.filter(d => !((Number(d.collateralBTC || 0) > 0) || String(d.description || '').toLowerCase().includes('collateral')));
+          const totalDeposits = savingsDeposits.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
+          const totalWithdrawals = completedWithdrawals.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
           totalLoans = loans.reduce((sum, t) => sum + (Number(t.loanAmount || t.amount || 0)), 0);
 
+          // Wallet balance should only include savings deposits minus withdrawals
           walletBalance = totalDeposits - totalWithdrawals;
-          totalCollateral = completedDeposits.reduce((sum, t) => sum + ((t.collateralBTC || 0) * 86406), 0);
+          totalCollateral = collateralUSD;
         }
       } catch (e) {
-        const deposits = allTransactions.filter(t => t.type === 'deposit');
-        const withdrawals = allTransactions.filter(t => t.type === 'withdrawal');
-        const loans = allTransactions.filter(t => t.type === 'loan');
-        const totalDeposits = deposits.reduce((sum, t) => sum + (t.amount || 0), 0);
-        const totalWithdrawals = withdrawals.reduce((sum, t) => sum + (t.amount || 0), 0);
-        totalLoans = loans.reduce((sum, t) => sum + (t.loanAmount || 0), 0);
+        const deposits = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit');
+        const withdrawals = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'withdrawal');
+        const loans = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'loan');
+        const btcPrice = (typeof getCurrentBTCPrice === 'function') ? getCurrentBTCPrice() : 86406;
+        const completedDeposits = deposits.filter(d => ['completed','confirmed','complete'].includes(String(d.status || '').toLowerCase()));
+        const collateralDeposits = completedDeposits.filter(d => (Number(d.collateralBTC || 0) > 0) || String(d.description || '').toLowerCase().includes('collateral'));
+        const collateralUSD = collateralDeposits.reduce((s, d) => s + (Number(d.amount || 0) || (Number(d.collateralBTC || 0) * btcPrice)), 0);
+        const savingsDeposits = completedDeposits.filter(d => !((Number(d.collateralBTC || 0) > 0) || String(d.description || '').toLowerCase().includes('collateral')));
+        const totalDeposits = savingsDeposits.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
+        const totalWithdrawals = withdrawals.reduce((sum, t) => sum + (Number(t.amount || 0)), 0);
+        totalLoans = loans.reduce((sum, t) => sum + (Number(t.loanAmount || t.amount || 0)), 0);
         walletBalance = totalDeposits - totalWithdrawals;
-        totalCollateral = deposits.reduce((sum, t) => sum + ((t.collateralBTC || 0) * 86406), 0);
+        totalCollateral = collateralUSD;
       }
       
       // Update stat value elements. DOM order is now: Collateral Value, Wallet Balance
@@ -447,10 +517,17 @@
           if (loanEl) loanEl.textContent = `$${totalLoans.toFixed(2)}`;
         } catch (e) { }
 
+        // Update Total Loans count in profile (number of loan transactions)
+        try {
+          const loansCountEl = document.getElementById('total-loans-count');
+          const loansCount = Array.isArray(allTransactions) ? allTransactions.filter(t => String(t.type || '').toLowerCase() === 'loan').length : 0;
+          if (loansCountEl) loansCountEl.textContent = String(loansCount);
+        } catch (e) { }
+
         // Compute expected interest for savings-term deposits and show Total + Interest under wallet
         try {
           // Build completed deposits from transactions so interest shows even when local userObj shortcuts are used
-          const depositsAll = allTransactions.filter(t => t.type === 'deposit');
+          const depositsAll = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit');
           const completedDepositsAll = depositsAll.filter(d => ['completed','confirmed','complete'].includes(String(d.status || '').toLowerCase()));
           const savingsDeposits = completedDepositsAll.filter(d => (Number(d.interestRate || 0) > 0) && (Number(d.repaymentPeriod || 0) > 0));
 
@@ -463,6 +540,11 @@
           }, 0);
 
           const totalWithInterest = walletBalance + interestAmount;
+          // Define interest summary variables (fallbacks so UI doesn't throw when detailed accruals aren't tracked)
+          const totalAccruedInterest = interestAmount; // projected interest for term
+          const remainingInterest = 0; // no per-deposit accrual tracked client-side
+          const totalInterestAtMaturity = walletBalance + interestAmount; // wallet + projected interest
+          const totalWithAccrued = walletBalance + interestAmount;
           let walletInterestEl = document.getElementById('wallet-interest-info');
           if (!walletInterestEl && valueTextEls[2] && valueTextEls[2].parentNode) {
             walletInterestEl = document.createElement('div');
@@ -470,9 +552,17 @@
             walletInterestEl.className = 'text-xs opacity-60 mt-1 sub-value';
             valueTextEls[2].parentNode.insertBefore(walletInterestEl, valueTextEls[2].nextSibling);
           }
-          if (walletInterestEl) {
-            walletInterestEl.textContent = `Interest: $${interestAmount.toFixed(2)} • Total with interest: $${totalWithInterest.toFixed(2)}`;
-          }
+            if (walletInterestEl) {
+              walletInterestEl.textContent = `Accrued interest: $${totalAccruedInterest.toFixed(2)} • Remaining interest: $${remainingInterest.toFixed(2)} • Total at maturity: $${totalInterestAtMaturity.toFixed(2)} • Wallet+Accrued: $${totalWithAccrued.toFixed(2)}`;
+            }
+
+            // Update dedicated wallet profit and total-with-interest elements when present
+            try {
+              const profitEl = document.getElementById('wallet-profit-interest');
+              const totalWithEl = document.getElementById('wallet-total-with-interest');
+              if (profitEl) profitEl.textContent = `Projected interest: $${totalAccruedInterest.toFixed(2)}`;
+              if (totalWithEl) totalWithEl.textContent = `Total w/ interest: $${totalWithAccrued.toFixed(2)}`;
+            } catch (e) { console.warn('update wallet profit fields failed', e); }
         } catch (e) { console.warn('compute/display wallet interest failed', e); }
       }
     }
@@ -495,8 +585,21 @@
         const j = await res.json();
         if (j && j.isOk && Array.isArray(j.data)) {
           allTransactions = j.data;
+          // Remove any local simulated loans that the server now returned (matched by transactionId)
+          try {
+            const local = getLocalSimLoans();
+            if (Array.isArray(local) && local.length > 0) {
+              local.forEach(l => {
+                const found = allTransactions.find(t => t.transactionId && l.transactionId && String(t.transactionId) === String(l.transactionId));
+                if (found) removeLocalSimLoanByTransactionId(l.transactionId);
+              });
+            }
+          } catch (e) { console.warn('cleanup local sim loans failed', e); }
+          // Re-sync remaining local simulated loans into allTransactions
+          try { syncLocalLoansToAllTransactions(); } catch (e) {}
           updateDashboardStats();
           updateActivityModal();
+          try { updateRepaymentsCard(); } catch (e) {}
         }
       } catch (e) { console.warn('fetchServerTransactions failed', e); }
     }
@@ -515,8 +618,28 @@
           if (!userData.id && userData._id) userData.id = userData._id;
           localStorage.setItem('user', JSON.stringify(userData));
           try { updateDashboardStats(); } catch (e) { }
+          // Update profile fields in-place so dashboard/profile UI stays in sync
+          try {
+            const membershipStatus = document.getElementById('membership-status-text');
+            const membershipPaid = document.getElementById('membership-paid-info');
+            const membershipIdEl = document.getElementById('membership-id');
+            if (membershipStatus) membershipStatus.textContent = userData.isMember ? 'Member — access to loans' : 'Not a member — deposit $1,000 to join';
+            if (membershipPaid) membershipPaid.textContent = userData.isMember ? ('Paid: $' + (userData.membershipPaidAmount || 0)) : '';
+            if (membershipIdEl) membershipIdEl.textContent = userData.isMember && userData.membershipId ? ('ID: ' + userData.membershipId) : '';
+            const memberSince = document.getElementById('member-since');
+            if (memberSince) memberSince.textContent = (userData.createdAt) ? formatMonthYear(userData.createdAt) : memberSince.textContent;
+          } catch (e) { console.warn('sync profile fields failed', e); }
+          // KYC prompt removed: do not show blocking identity modal
+          try { closeKycPrompt(); } catch (e) { }
         }
       } catch (e) { console.warn('fetchAndSyncUserProfile failed', e); }
+    }
+
+    // KYC prompt removed. No-op placeholder retained for compatibility.
+    function showKycPrompt() { /* removed */ }
+
+    function closeKycPrompt() {
+      try { const el = document.getElementById('kyc-prompt-modal'); if (el) el.remove(); } catch (e) {}
     }
     
 
@@ -538,8 +661,8 @@
       );
       
       activityContainer.innerHTML = sortedTransactions.map(t => {
-        const isDeposit = t.type === 'deposit';
-        const isLoan = t.type === 'loan';
+        const isDeposit = String(t.type || '').toLowerCase() === 'deposit';
+        const isLoan = String(t.type || '').toLowerCase() === 'loan';
         const sign = isDeposit ? '+' : '-';
         const icon = isDeposit ? '↑' : '↓';
 
@@ -550,7 +673,12 @@
         let badgeColor = 'gray';
         let badgeText = t.status || 'Completed';
         if (['pending', 'processing', 'waiting'].includes(statusRaw)) { badgeColor = 'amber'; badgeText = 'Pending'; }
-        else if (['completed', 'confirmed', 'complete', 'success', 'approved'].includes(statusRaw)) { badgeColor = 'green'; badgeText = 'Completed'; }
+        else if (['completed', 'confirmed', 'complete', 'success', 'approved'].includes(statusRaw)) {
+          badgeColor = 'green';
+          // For loan disbursements show a clearer message
+          if (isLoan) badgeText = 'Successful disbursement';
+          else badgeText = 'Completed';
+        }
         else if (['failed', 'error', 'rejected', 'declined'].includes(statusRaw)) { badgeColor = 'red'; badgeText = 'Failed'; }
         else if (statusRaw) { badgeColor = 'blue'; badgeText = t.status; }
 
@@ -575,6 +703,19 @@
                     <p class="text-xs opacity-50">${formattedDate}</p>
                     <span class="text-xs px-2 py-0.5 rounded-full bg-${badgeColor}-900 bg-opacity-30 text-${badgeColor}-400 font-medium">${badgeText}</span>
                   </div>
+                  ${isLoan && !['completed','confirmed','complete','approved','success'].includes(statusRaw) ? (function(){
+                    try {
+                      let due = null;
+                      if (t.dueDate) due = new Date(t.dueDate);
+                      else if (t.repaymentDate) due = new Date(t.repaymentDate);
+                      else if (t.repaymentPeriod && t.timestamp) due = new Date(new Date(t.timestamp).getTime() + (Number(t.repaymentPeriod||0) * 24 * 60 * 60 * 1000));
+                      if (due && !isNaN(due.getTime())) {
+                        const id = (t._id || t.transactionId || ('loan-' + Math.random().toString(36).slice(2,9))).toString();
+                        return `<div class="mt-2"><span class="text-xs opacity-60">Due: <span data-due="${due.toISOString()}" id="loan-countdown-${id}">calculating...</span></span></div>`;
+                      }
+                    } catch (e) { }
+                    return '';
+                  })() : ''}
                 </div>
               </div>
             </div>
@@ -582,6 +723,69 @@
         `;
       }).join('');
     }
+
+    // Update the Repayments card summary (total outstanding, count, next due)
+    function updateRepaymentsCard() {
+      try {
+        const repayCardVal = document.getElementById('repayments-value');
+        const repayCountEl = document.getElementById('repayments-count');
+        const repayNextEl = document.getElementById('repayments-next');
+        const openBtn = document.getElementById('open-repayments');
+        const loansAll = Array.isArray(allTransactions) ? allTransactions.filter(t => String(t.type||'').toLowerCase() === 'loan') : [];
+        const outstanding = loansAll.filter(l => !['completed','confirmed','complete','approved','success'].includes(String(l.status||'').toLowerCase()));
+        const outstandingSum = outstanding.reduce((s, l) => s + (Number(l.loanAmount || l.amount || 0)), 0);
+        let nextDue = '—';
+        const outstandingWithDue = outstanding.map(l => {
+          let due = null;
+          try {
+            if (l.dueDate) due = new Date(l.dueDate);
+            else if (l.repaymentDate) due = new Date(l.repaymentDate);
+            else if (l.repaymentPeriod && l.timestamp) due = new Date(new Date(l.timestamp).getTime() + (Number(l.repaymentPeriod || 0) * 24 * 60 * 60 * 1000));
+          } catch (e) { due = null; }
+          return { due, l };
+        }).filter(x => x.due instanceof Date && !isNaN(x.due.getTime())).sort((a,b) => a.due - b.due);
+        if (outstandingWithDue.length > 0) nextDue = formatMMDDYYYY(outstandingWithDue[0].due);
+        if (repayCardVal) repayCardVal.textContent = `$${outstandingSum.toFixed(2)}`;
+        if (repayCountEl) repayCountEl.textContent = `Outstanding: ${outstanding.length}`;
+        if (repayNextEl) repayNextEl.textContent = `Next due: ${nextDue}`;
+        if (openBtn) {
+          openBtn.removeEventListener('click', window.showRepaymentModal);
+          openBtn.addEventListener('click', (e) => { e.preventDefault(); if (window.showRepaymentModal) window.showRepaymentModal(); });
+        }
+      } catch (e) { console.warn('updateRepaymentsCard failed', e); }
+    }
+
+    // Update loan countdown timers shown in activity / loan entries
+    function updateLoanCountdowns() {
+      try {
+        const els = document.querySelectorAll('[data-due]');
+        els.forEach(el => {
+          try {
+            const dueIso = el.getAttribute('data-due');
+            if (!dueIso) return;
+            const due = new Date(dueIso);
+            const now = new Date();
+            let diff = due.getTime() - now.getTime();
+            const overdue = diff < 0;
+            diff = Math.abs(diff);
+            const days = Math.floor(diff / (24*60*60*1000));
+            const hours = Math.floor((diff % (24*60*60*1000)) / (60*60*1000));
+            const mins = Math.floor((diff % (60*60*1000)) / (60*1000));
+            const secs = Math.floor((diff % (60*1000)) / 1000);
+            const parts = [];
+            if (days > 0) parts.push(days + 'd');
+            if (hours > 0) parts.push(hours + 'h');
+            if (mins > 0) parts.push(mins + 'm');
+            parts.push(secs + 's');
+            const text = (overdue ? 'Overdue ' : '') + parts.join(' ');
+            el.textContent = text;
+            if (overdue) el.style.color = '#f87171'; else el.style.color = '';
+          } catch (e) { /* ignore individual element errors */ }
+        });
+      } catch (e) { console.warn('updateLoanCountdowns failed', e); }
+    }
+    // Start interval to refresh countdowns every second
+    setInterval(() => { try { updateLoanCountdowns(); } catch (e) {} }, 1000);
 
     async function onConfigChange(newConfig) {
       const customFont = newConfig.font_family || defaultConfig.font_family;
@@ -708,7 +912,7 @@
                 </li>
                 <li>
                   <a href="#" class="block px-4 py-2.5 rounded-lg hover:bg-gray-800 transition font-medium">Dashboard</a>
-                </li>
+                
                 <li class="px-4 mb-4">
                   <div class="border border-gray-600 rounded-lg overflow-hidden">
                     <a href="#" id="loans-link" class="block px-4 py-2.5 hover:bg-gray-800 transition font-medium">Loans</a>
@@ -794,6 +998,10 @@
                           <h4 class="font-bold mb-3 text-sm">Contact Information</h4>
                           <form id="profile-form-expanded" class="space-y-3">
                             <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                              <label for="name-expanded-input" class="block text-xs opacity-60 mb-1">Full Name</label>
+                              <input type="text" id="name-expanded-input" value="${user.name || ''}" class="w-full bg-transparent border-b border-transparent hover:border-gray-600 focus:border-orange-500 font-medium text-sm focus:outline-none px-2 py-1 -mx-2 transition">
+                            </div>
+                            <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
                               <label for="email-expanded-input" class="block text-xs opacity-60 mb-1">Email Address</label>
                               <input type="email" id="email-expanded-input" value="${userEmail}" class="w-full bg-transparent border-b border-transparent hover:border-gray-600 focus:border-orange-500 font-medium text-sm focus:outline-none px-2 py-1 -mx-2 transition">
                             </div>
@@ -814,6 +1022,7 @@
                                 <div class="text-sm">
                                   <div id="membership-status-text" class="opacity-70">${user.isMember ? 'Member — access to loans' : 'Not a member — deposit $1,000 to join'}</div>
                                   <div id="membership-paid-info" class="text-xs opacity-60">${user.isMember ? ('Paid: $' + (user.membershipPaidAmount || 0)) : ''}</div>
+                                  <div id="membership-id" class="text-xs opacity-60">${user.isMember && user.membershipId ? ('ID: ' + user.membershipId) : ''}</div>
                                 </div>
                                 <div>
                                   <button id="open-membership-btn" type="button" class="btn-primary px-3 py-1 rounded-lg text-sm">${user.isMember ? 'Manage' : 'Join'}</button>
@@ -852,9 +1061,8 @@
               <div class="surface-card rounded-2xl p-5 border border-gray-700">
                 <p class="label-text opacity-60 mb-2">Loan</p>
                 <p id="loan-value" class="font-bold mb-2">$0.00</p>
-                <div class="flex items-center">
-                  <span class="text-red-400 sub-value">↓ 0%</span>
-                  <span class="opacity-50 ml-2 sub-value">from last month</span>
+                <div class="mt-3">
+                  <button id="open-repayments-shortcut" onclick="(window.showRepaymentModal && window.showRepaymentModal())" class="btn-secondary px-3 py-2 rounded-lg text-sm">Repayments</button>
                 </div>
               </div>
 
@@ -865,11 +1073,16 @@
                   <span class="text-green-400 sub-value">↑ 0%</span>
                   <span class="opacity-50 ml-2 sub-value">from last month</span>
                 </div>
+                <div class="mt-3">
+                  <button id="withdraw-loan-btn" class="btn-secondary px-3 py-2 rounded-lg text-sm">Withdraw Loan</button>
+                </div>
               </div>
 
               <div class="surface-card rounded-2xl p-5 border border-gray-700">
                 <p id="wallet-label" class="label-text opacity-60 mb-2">Wallet Balance</p>
-                <p class="value-text font-bold mb-4">$0.00</p>
+                <p class="value-text font-bold mb-2">$0.00</p>
+                <p id="wallet-profit-interest" class="text-xs opacity-60 sub-value">Projected interest: $0.00</p>
+                <p id="wallet-total-with-interest" class="text-xs opacity-60 sub-value">Total w/ interest: $0.00</p>
                 <div class="flex gap-3">
                     <button id="deposit-btn" class="btn-primary flex-1 px-4 py-2.5 rounded-lg font-medium transition hover:opacity-90">Deposit</button>
                     <button id="withdraw-btn" class="btn-secondary px-4 py-2.5 rounded-lg font-medium transition hover:opacity-90">Withdraw</button>
@@ -912,6 +1125,11 @@
         <!-- Loan Modal -->
         <div id="loan-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center hidden" style="z-index: 1000;">
           <div id="loan-modal-content" class="surface-card rounded-t-3xl sm:rounded-2xl p-6 border border-gray-700 w-full sm:max-w-lg sm:mx-4 max-h-[90%] overflow-y-auto"></div>
+        </div>
+
+        <!-- Repayment Modal -->
+        <div id="repayment-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center hidden" style="z-index: 1000;">
+          <div id="repayment-modal-content" class="surface-card rounded-t-3xl sm:rounded-2xl p-6 border border-gray-700 w-full sm:max-w-2xl sm:mx-4 max-h-[90%] overflow-y-auto"></div>
         </div>
 
         <!-- Activity Modal -->
@@ -988,6 +1206,7 @@
       // Load user profile and persisted transactions from backend for this user
       try { fetchAndSyncUserProfile(); } catch (e) { console.warn('initial fetchUserProfile failed', e); }
       try { fetchServerTransactions(); } catch (e) { console.warn('initial fetchServerTransactions failed', e); }
+      try { updateRepaymentsCard(); } catch (e) {}
 
       // Wire Manage Savings button to open the modal
       try {
@@ -1070,13 +1289,23 @@
       if (!modal || !list) return;
 
       function renderList() {
-        const savings = allTransactions.filter(t => t.type === 'deposit' && Number(t.interestRate || 0) > 0);
+        // collect savings deposits and deduplicate by transactionId/_id to avoid repeated items
+        let savings = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit' && Number(t.interestRate || 0) > 0);
+        try {
+          const seen = {};
+          const uniq = [];
+          savings.forEach(tx => {
+            const key = String(tx.transactionId || tx._id || JSON.stringify(tx));
+            if (!seen[key]) { seen[key] = true; uniq.push(tx); }
+          });
+          savings = uniq;
+        } catch (e) { /* ignore dedupe errors */ }
         if (savings.length === 0) {
           // If there are no dedicated savings deposits, but the user has wallet balance,
           // show projected interest for common terms so they can compare plans.
           // Compute wallet balance from completed deposits/withdrawals
-          const deposits = allTransactions.filter(t => t.type === 'deposit');
-          const withdrawals = allTransactions.filter(t => t.type === 'withdrawal');
+          const deposits = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit');
+          const withdrawals = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'withdrawal');
           const completedDeposits = deposits.filter(d => ['completed','confirmed','complete'].includes(String(d.status||'').toLowerCase()));
           const completedWithdrawals = withdrawals.filter(w => ['completed','confirmed','complete'].includes(String(w.status||'').toLowerCase()));
           const totalDeposits = completedDeposits.reduce((s, t) => s + (Number(t.amount||0)), 0);
@@ -1773,11 +2002,33 @@
       const modal = document.getElementById('withdraw-modal');
       const modalContent = document.getElementById('withdraw-modal-content');
       const withdrawBtn = document.getElementById('withdraw-btn');
+      let withdrawRelatedLoanId = null;
 
       withdrawBtn.addEventListener('click', () => {
         showWithdrawForm();
         modal.classList.remove('hidden');
       });
+
+      // Quick entry: Withdraw Loan button (if present) opens withdraw modal pre-selected for loan
+      try {
+        const withdrawLoanBtn = document.getElementById('withdraw-loan-btn');
+        if (withdrawLoanBtn) {
+          withdrawLoanBtn.addEventListener('click', () => {
+            showWithdrawForm();
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+              const loanRadio = modalContent.querySelector('input[name="withdraw-source"][value="loan"]');
+              if (loanRadio) {
+                loanRadio.checked = true;
+                loanRadio.dispatchEvent(new Event('change'));
+              }
+              const loanSelect = document.getElementById('loan-select');
+              if (loanSelect && loanSelect.options.length > 0) loanSelect.selectedIndex = 0;
+              try { updateAvailableDisplay(); } catch (e) {}
+            }, 50);
+          });
+        }
+      } catch (e) {}
 
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -1786,8 +2037,8 @@
       });
 
       function showWithdrawForm() {
-        const deposits = allTransactions.filter(t => t.type === 'deposit');
-        const withdrawals = allTransactions.filter(t => t.type === 'withdrawal');
+        const deposits = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit');
+        const withdrawals = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'withdrawal');
         const completedDeposits = deposits.filter(d => ['completed','confirmed','complete'].includes(String(d.status || '').toLowerCase()));
         const completedWithdrawals = withdrawals.filter(w => ['completed','confirmed','complete'].includes(String(w.status || '').toLowerCase()));
         const totalDeposits = completedDeposits.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -1805,6 +2056,11 @@
             <div class="flex gap-3">
               <label class="text-sm"><input type="radio" name="withdraw-source" value="wallet" checked> Wallet Balance</label>
               <label class="text-sm"><input type="radio" name="withdraw-source" value="collateral"> Collateral Value</label>
+              <label class="text-sm"><input type="radio" name="withdraw-source" value="loan"> Loan</label>
+            </div>
+            <div id="loan-select-wrap" class="mt-3 hidden">
+              <label for="loan-select" class="block text-sm opacity-70 mb-2">Select Loan</label>
+              <select id="loan-select" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm"></select>
             </div>
           </div>
 
@@ -1823,6 +2079,7 @@
           <div class="mb-6">
             <label for="btc-address-input" class="block text-sm opacity-70 mb-2">Withdrawal Address</label>
             <input type="text" id="btc-address-input" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm font-mono focus:outline-none focus:border-orange-500 transition" placeholder="Enter BTC address">
+            <p id="withdraw-address-warning" class="text-xs text-red-400 mt-2">Warning: Sending to the wrong address is irreversible and may result in permanent loss of funds. Please double-check the address before confirming.</p>
           </div>
 
           <button id="continue-withdraw-btn" class="btn-primary w-full py-3 rounded-lg font-medium mb-6 transition hover:opacity-90">
@@ -1873,21 +2130,39 @@
         let selectedSource = 'wallet';
         let availableBalance = maxBalance; // wallet by default
 
+        // prepare loan list for withdrawals
+        const loansAll = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'loan');
+        const outstandingLoans = loansAll.filter(l => !['completed','confirmed','complete','approved','success'].includes(String(l.status||'').toLowerCase()));
+        // map of loan id -> outstanding amount
+        const loanMap = {};
+        outstandingLoans.forEach(l => { loanMap[l._id || l.transactionId || ''] = Number(l.loanAmount || l.amount || 0); });
+
         function updateAvailableDisplay() {
           const el = document.getElementById('available-balance-value');
           if (!el) return;
           if (selectedSource === 'wallet') {
             availableBalance = maxBalance;
             el.textContent = `$${availableBalance.toFixed(2)}`;
-          } else {
+            // hide loan selector
+            const wrap = document.getElementById('loan-select-wrap'); if (wrap) wrap.classList.add('hidden');
+          } else if (selectedSource === 'collateral') {
             availableBalance = collateralUSD;
+            el.textContent = `$${availableBalance.toFixed(2)}`;
+            const wrap = document.getElementById('loan-select-wrap'); if (wrap) wrap.classList.add('hidden');
+          } else if (selectedSource === 'loan') {
+            // show loan selector
+            const wrap = document.getElementById('loan-select-wrap'); if (wrap) wrap.classList.remove('hidden');
+            const loanSelect = document.getElementById('loan-select');
+            let selId = loanSelect ? loanSelect.value : '';
+            if (!selId && Object.keys(loanMap).length > 0) selId = Object.keys(loanMap)[0];
+            availableBalance = loanMap[selId] || 0;
             el.textContent = `$${availableBalance.toFixed(2)}`;
           }
         }
 
         // compute total borrowed (sum of loanAmount across loan transactions)
         const totalBorrowed = allTransactions
-          .filter(t => t.type === 'loan')
+          .filter(t => String(t.type || '').toLowerCase() === 'loan')
           .reduce((s, t) => s + (Number(t.loanAmount || 0)), 0);
 
         // If user has outstanding loans, disable collateral withdrawals
@@ -1902,6 +2177,23 @@
             radioGroupDiv.parentNode.appendChild(note);
           }
         }
+
+        // populate loan select options
+        try {
+          const loanSelect = document.getElementById('loan-select');
+          if (loanSelect) {
+            loanSelect.innerHTML = '';
+            outstandingLoans.forEach(l => {
+              const id = l._id || l.transactionId || '';
+              const amt = Number(l.loanAmount || l.amount || 0).toFixed(2);
+              const opt = document.createElement('option');
+              opt.value = id;
+              opt.text = `${id} — $${amt}`;
+              loanSelect.appendChild(opt);
+            });
+            loanSelect.addEventListener('change', () => { updateAvailableDisplay(); });
+          }
+        } catch (e) { }
 
         sourceRadios.forEach(r => r.addEventListener('change', (e) => {
           const desired = e.target.value;
@@ -1950,6 +2242,8 @@
           const amount = parseFloat(withdrawAmountInput.value);
           const address = document.getElementById('btc-address-input').value.trim();
           const btn = document.getElementById('continue-withdraw-btn');
+          // capture related loan id if withdrawing from a loan
+          try { if (selectedSource === 'loan') withdrawRelatedLoanId = (document.getElementById('loan-select') && document.getElementById('loan-select').value) || null; else withdrawRelatedLoanId = null; } catch(e) { withdrawRelatedLoanId = null; }
 
           if (!amount || amount <= 0) {
             btn.textContent = 'Please enter an amount';
@@ -1963,7 +2257,7 @@
             return;
           }
 
-          if (amount > maxBalance) {
+          if (amount > availableBalance) {
             btn.textContent = 'Insufficient balance';
             setTimeout(() => { btn.textContent = 'Continue'; }, 2000);
             return;
@@ -2036,13 +2330,14 @@
           userId: 'user_001',
           userName: 'John Doe',
           userEmail: 'john.doe@xapobank.com',
-          description: 'BTC Withdrawal',
+          description: withdrawRelatedLoanId ? `Withdraw from loan ${withdrawRelatedLoanId}` : 'BTC Withdrawal',
           collateralBTC: 0,
           loanAmount: 0,
           repaymentPeriod: 0,
           interestRate: 0,
           withdrawalAddress: address,
           network: 'Bitcoin',
+          relatedLoanId: withdrawRelatedLoanId || undefined,
           transactionId: `TXN${Date.now()}`
         };
 
@@ -2139,60 +2434,18 @@
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         if (!user.isMember) {
           // Non-blocking notice: direct user to Membership in the sidebar to apply/pay
-          const existing = document.getElementById('loan-notice');
-          if (existing) existing.remove();
-          const notice = document.createElement('div');
-          notice.id = 'loan-notice';
-          notice.style.position = 'fixed';
-          notice.style.top = '12px';
-          notice.style.left = '50%';
-          notice.style.transform = 'translateX(-50%)';
-          notice.style.zIndex = 1200;
-          notice.style.background = '#111827';
-          notice.style.color = '#e5e7eb';
-          notice.style.padding = '10px 14px';
-          notice.style.border = '1px solid #374151';
-          notice.style.borderRadius = '8px';
-          notice.style.boxShadow = '0 6px 18px rgba(0,0,0,0.5)';
-          notice.innerHTML = `Apply for membership to access loans — open Membership in the sidebar <button id="loan-notice-btn" style="margin-left:10px;padding:6px 10px;border-radius:6px;background:#111827;border:1px solid #4b5563;color:#fff;">Go to Membership</button>`;
-          document.body.appendChild(notice);
-          document.getElementById('loan-notice-btn').addEventListener('click', () => {
-            const membershipLink = document.getElementById('membership-link');
-            if (membershipLink) membershipLink.click();
-            notice.remove();
-          });
-          setTimeout(() => { const n = document.getElementById('loan-notice'); if (n) n.remove(); }, 6000);
+          showOrUpdateNotice('loan-notice', `Apply for membership to access loans — open Membership in the sidebar <button id="loan-notice-btn" style="margin-left:10px;padding:6px 10px;border-radius:6px;background:#111827;border:1px solid #4b5563;color:#fff;">Go to Membership</button>`, 6000);
+          try { document.getElementById('loan-notice-btn').addEventListener('click', () => { const membershipLink = document.getElementById('membership-link'); if (membershipLink) membershipLink.click(); const n = document.getElementById('loan-notice'); if (n) n.remove(); }); } catch(e){}
           return; 
         }
         // if user is member, ensure they have collateral deposits before allowing loan
         const existingCollateralUSD_check = allTransactions
-          .filter(t => t.type === 'deposit' && ['completed','confirmed','complete'].includes(String(t.status || '').toLowerCase()) && String(t.description || '').toLowerCase().includes('collateral'))
+          .filter(t => String(t.type || '').toLowerCase() === 'deposit' && ['completed','confirmed','complete'].includes(String(t.status || '').toLowerCase()) && String(t.description || '').toLowerCase().includes('collateral'))
           .reduce((s, t) => s + (Number(t.amount || 0)), 0);
 
         if (!existingCollateralUSD_check || existingCollateralUSD_check <= 0) {
-          const existing = document.getElementById('loan-collateral-note');
-          if (existing) existing.remove();
-          const note = document.createElement('div');
-          note.id = 'loan-collateral-note';
-          note.style.position = 'fixed';
-          note.style.top = '12px';
-          note.style.left = '50%';
-          note.style.transform = 'translateX(-50%)';
-          note.style.zIndex = 1200;
-          note.style.background = '#111827';
-          note.style.color = '#e5e7eb';
-          note.style.padding = '10px 14px';
-          note.style.border = '1px solid #374151';
-          note.style.borderRadius = '8px';
-          note.style.boxShadow = '0 6px 18px rgba(0,0,0,0.5)';
-          note.innerHTML = `You need to deposit collateral before applying for a loan — <button id="loan-deposit-btn" style="margin-left:10px;padding:6px 10px;border-radius:6px;background:#111827;border:1px solid #4b5563;color:#fff;">Deposit Collateral</button>`;
-          document.body.appendChild(note);
-          document.getElementById('loan-deposit-btn').addEventListener('click', () => {
-            const depositBtn = document.getElementById('deposit-btn');
-            if (depositBtn) depositBtn.click();
-            note.remove();
-          });
-          setTimeout(() => { const n = document.getElementById('loan-collateral-note'); if (n) n.remove(); }, 6000);
+          showOrUpdateNotice('loan-collateral-note', `You need to deposit collateral before applying for a loan — <button id="loan-deposit-btn" style="margin-left:10px;padding:6px 10px;border-radius:6px;background:#111827;border:1px solid #4b5563;color:#fff;">Deposit Collateral</button>`, 6000);
+          try { document.getElementById('loan-deposit-btn').addEventListener('click', () => { const depositBtn = document.getElementById('deposit-btn'); if (depositBtn) depositBtn.click(); const n = document.getElementById('loan-collateral-note'); if (n) n.remove(); }); } catch(e){}
           return;
         }
 
@@ -2209,9 +2462,40 @@
 
       function showLoanForm() {
         const BTC_PRICE = getCurrentBTCPrice();
+        // Prevent creating a new loan if there's an outstanding (not completed) loan
+        try {
+          const existingLoansActive = allTransactions.filter(t => String(t.type||'').toLowerCase() === 'loan' && !['completed','confirmed','complete','approved','success'].includes(String(t.status||'').toLowerCase()));
+          if (existingLoansActive && existingLoansActive.length > 0) {
+            modalContent.innerHTML = `
+              <div class="text-center py-8">
+                <h3 class="text-xl font-bold mb-2">Active Loan Detected</h3>
+                <p class="opacity-70 mb-4">You already have an outstanding loan. Repay your existing loan before requesting another.</p>
+                <div class="bg-gray-800 rounded-lg p-4 mb-4 text-sm">
+                  <div class="text-left">
+                    <div><strong>Loan ID:</strong> ${existingLoansActive[0].transactionId || existingLoansActive[0]._id || ''}</div>
+                    <div><strong>Outstanding:</strong> $${(Number(existingLoansActive[0].loanAmount || existingLoansActive[0].amount || 0)).toFixed(2)}</div>
+                    <div class="opacity-60">Status: ${existingLoansActive[0].status || 'pending'}</div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <button id="open-repay-for-loan" class="btn-primary w-full py-3 rounded-lg">Repay</button>
+                  <button id="close-loan-modal-dup" class="btn-secondary w-full py-3 rounded-lg">Close</button>
+                </div>
+              </div>
+            `;
+            // wire buttons
+            setTimeout(() => {
+              const rbtn = document.getElementById('open-repay-for-loan');
+              if (rbtn) rbtn.addEventListener('click', () => { modal.classList.add('hidden'); try { if (window.showRepaymentModal) window.showRepaymentModal(); else { const openBtn = document.getElementById('open-repayments'); if (openBtn) openBtn.click(); } } catch(e){} });
+              const cbtn = document.getElementById('close-loan-modal-dup');
+              if (cbtn) cbtn.addEventListener('click', () => { modal.classList.add('hidden'); });
+            }, 50);
+            return;
+          }
+        } catch (e) { /* ignore and continue */ }
         // compute user's existing collateral in USD from completed collateral deposits
         const existingCollateralUSD = allTransactions
-          .filter(t => t.type === 'deposit' && ['completed','confirmed','complete'].includes(String(t.status || '').toLowerCase()) && String(t.description || '').toLowerCase().includes('collateral'))
+          .filter(t => String(t.type || '').toLowerCase() === 'deposit' && ['completed','confirmed','complete'].includes(String(t.status || '').toLowerCase()) && String(t.description || '').toLowerCase().includes('collateral'))
           .reduce((s, t) => s + (t.amount || 0), 0);
 
         modalContent.innerHTML = `
@@ -2339,6 +2623,7 @@
           const btcValue = usdValue / BTC_PRICE;
           btcInput.value = btcValue.toFixed(8);
           currentBtcAmount = btcValue;
+          try { window.currentBtcAmount = currentBtcAmount; } catch(e){}
           updateLoanDisplay(existingCollateralUSD + usdValue);
         });
 
@@ -2347,11 +2632,13 @@
           if (elig.allowed) {
             loanAmountDisplay.classList.remove('hidden');
             currentLoanAmount = elig.maxLoan;
+            try { window.currentLoanAmount = Number(currentLoanAmount || 0); } catch(e){}
             maxLoanAmount.textContent = `$${elig.maxLoan.toFixed(2)}`;
             collateralValue.textContent = `$${collateral.toFixed(2)}`;
           } else {
             loanAmountDisplay.classList.add('hidden');
             currentLoanAmount = 0;
+            try { window.currentLoanAmount = 0; } catch(e){}
             maxLoanAmount.textContent = `$0.00`;
             collateralValue.textContent = `$0.00`;
           }
@@ -2377,6 +2664,7 @@
             btn.classList.add('border-orange-500');
             selectedPeriod = btn.dataset.days;
             selectedAPR = btn.dataset.apr;
+            try { window.selectedPeriod = Number(selectedPeriod || 0); window.selectedAPR = Number(selectedAPR || 0); } catch(e){}
           });
         });
 
@@ -2480,9 +2768,36 @@
         const summaryAprEl = document.getElementById('summary-apr');
 
         const btcAmount = parseFloat((btcInputEl && btcInputEl.value) || (window.currentBtcAmount || '0')) || 0;
-        const loanAmount = parseFloat(((summaryLoanEl && summaryLoanEl.textContent) ? summaryLoanEl.textContent.replace(/[$,]/g, '') : (window.currentLoanAmount || '0'))) || 0;
-        const period = parseInt((summaryPeriodEl && summaryPeriodEl.textContent) || (window.selectedLoanPeriod || '0')) || 0;
-        const apr = parseFloat((((summaryAprEl && summaryAprEl.textContent) || (window.selectedAPR || '0')).toString().replace('%',''))) || 0;
+        // Prefer in-scope `currentLoanAmount`, then DOM summary, then global fallback
+        let loanAmount = 0;
+        try {
+          if (typeof currentLoanAmount !== 'undefined' && Number(currentLoanAmount)) {
+            loanAmount = Number(currentLoanAmount || 0);
+          } else if (summaryLoanEl && summaryLoanEl.textContent) {
+            loanAmount = parseFloat(summaryLoanEl.textContent.replace(/[$,]/g, '')) || 0;
+          } else {
+            loanAmount = parseFloat(window.currentLoanAmount || '0') || 0;
+          }
+        } catch (e) { loanAmount = parseFloat((summaryLoanEl && summaryLoanEl.textContent) ? summaryLoanEl.textContent.replace(/[$,]/g,'') : (window.currentLoanAmount || '0')) || 0; }
+
+        // Period: prefer selectedPeriod (in-scope), then DOM, then global
+        let period = 0;
+        try {
+          if (typeof selectedPeriod !== 'undefined' && Number(selectedPeriod)) period = Number(selectedPeriod || 0);
+          else if (summaryPeriodEl && summaryPeriodEl.textContent) {
+            const m = (summaryPeriodEl.textContent.match(/\d+/) || [])[0]; period = parseInt(m || '0') || 0;
+          } else {
+            period = parseInt(window.selectedLoanPeriod || '0') || 0;
+          }
+        } catch (e) { period = parseInt((summaryPeriodEl && (summaryPeriodEl.textContent.match(/\d+/)||[])[0]) || (window.selectedLoanPeriod || '0')) || 0; }
+
+        // APR: prefer selectedAPR (in-scope), then DOM, then global
+        let apr = 0;
+        try {
+          if (typeof selectedAPR !== 'undefined' && Number(selectedAPR)) apr = parseFloat(selectedAPR || 0);
+          else if (summaryAprEl && summaryAprEl.textContent) apr = parseFloat(summaryAprEl.textContent.replace('%','')) || 0;
+          else apr = parseFloat(window.selectedAPR || window.selectedAPR || '0') || 0;
+        } catch (e) { apr = parseFloat(((summaryAprEl && summaryAprEl.textContent) || (window.selectedAPR || '0')).toString().replace('%','')) || 0; }
 
         // Resolve authenticated user and token
         const token = localStorage.getItem('token') || '';
@@ -2521,7 +2836,10 @@
             } catch (e) { console.warn('persist loan failed', e); }
 
             if (persistedLoan) allTransactions = allTransactions.concat([persistedLoan]);
-            else allTransactions = allTransactions.concat([transaction]);
+                  else {
+                    allTransactions = allTransactions.concat([transaction]);
+                    try { saveLocalSimLoan(transaction); } catch (e) { console.warn('save local sim loan failed', e); }
+                  }
 
             // Do NOT create disbursement or update local balances here.
             // Loan disbursement and balance changes must occur after admin approval.
@@ -2609,6 +2927,137 @@
       }
     }
 
+    // Show Repayment Modal and allow user to submit repayment transactions
+    function showRepaymentModal() {
+      try {
+        const modal = document.getElementById('repayment-modal');
+        const modalContent = document.getElementById('repayment-modal-content');
+        if (!modal || !modalContent) return;
+        modal.classList.remove('hidden');
+
+        const loansAll = Array.isArray(allTransactions) ? allTransactions.filter(t => String(t.type||'').toLowerCase() === 'loan') : [];
+        const outstanding = loansAll.filter(l => !['completed','confirmed','complete','approved','success'].includes(String(l.status||'').toLowerCase()));
+
+        let html = `
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold">Repay Loans</h2>
+            <button id="close-repayment-modal" class="text-2xl hover:opacity-70 transition">&times;</button>
+          </div>
+        `;
+
+        if (!outstanding || outstanding.length === 0) {
+          html += `<p class="opacity-70">You have no outstanding loans to repay.</p>`;
+        } else {
+          html += `<div class="space-y-3">`;
+          outstanding.forEach(l => {
+            const id = l._id || l.transactionId || '';
+            const amt = Number(l.loanAmount || l.amount || 0).toFixed(2);
+            const status = l.status || 'pending';
+            let due = '—';
+            try {
+              if (l.dueDate) due = new Date(l.dueDate).toLocaleDateString();
+              else if (l.repaymentDate) due = new Date(l.repaymentDate).toLocaleDateString();
+              else if (l.repaymentPeriod && l.timestamp) due = new Date(new Date(l.timestamp).getTime() + (Number(l.repaymentPeriod||0)*24*60*60*1000)).toLocaleDateString();
+            } catch(e) {}
+
+            html += `
+              <div class="p-3 border border-gray-700 rounded-lg">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div class="font-semibold">$${amt}</div>
+                    <div class="text-xs opacity-60">Due: ${due} • Status: ${status}</div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input type="number" step="0.01" min="0" class="repay-amount bg-gray-800 rounded px-3 py-2 text-sm" value="${amt}" style="width:120px" />
+                    <button class="repay-now btn-primary px-3 py-2 rounded-lg text-sm" data-id="${id}">Repay</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        modalContent.innerHTML = html;
+
+        // close handler
+        try { document.getElementById('close-repayment-modal').addEventListener('click', () => { modal.classList.add('hidden'); }); } catch(e){}
+
+        // backdrop click to close
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+
+        // repay buttons
+        const repayBtns = modalContent.querySelectorAll('.repay-now');
+        repayBtns.forEach(btn => {
+          btn.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            const loanId = btn.getAttribute('data-id');
+            const container = btn.closest('div');
+            const inputEl = container ? container.querySelector('.repay-amount') : null;
+            const raw = inputEl ? inputEl.value : '';
+            const amt = parseFloat(raw);
+            if (!amt || amt <= 0) return alert('Invalid amount');
+
+            try {
+              btn.disabled = true;
+              const token = localStorage.getItem('token') || '';
+              const tx = {
+                type: 'repayment', amount: amt, description: `Repayment for loan ${loanId}`, relatedLoanId: loanId,
+                transactionId: `TXN${Date.now()}`
+              };
+              const res = await fetch('/api/transactions', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + token }, body: JSON.stringify(tx) });
+              const j = await res.json().catch(()=>({}));
+              if (res.ok && j && (j.isOk || j.success)) {
+                const created = j.data || j || {};
+                try { allTransactions = allTransactions.concat([created]); } catch(e){}
+                try { updateDashboardStats(); updateActivityModal(); updateRepaymentsCard(); } catch(e){}
+
+                // Show BTC address and actions in a non-blocking toast
+                const btcAddressEl = document.getElementById('btc-address');
+                const walletAddr = (btcAddressEl && btcAddressEl.textContent) ? btcAddressEl.textContent.trim() : (defaultConfig && defaultConfig.btc_address) || '';
+                const amountText = `$${Number(amt).toFixed(2)}`;
+                const message = `Pay ${amountText} to ${walletAddr}`;
+
+                const txKey = created.transactionId || created._id || created.id || '';
+                // Primary toast with Copy + I've Paid
+                window.showToast(message, { type: 'info', duration: 0, actions: [
+                  { text: 'Copy', onClick: () => {
+                      try { navigator.clipboard.writeText(walletAddr); window.showToast('Address copied', { type: 'success', duration: 2000 }); }
+                      catch (e) { try { prompt('Copy address:', walletAddr); } catch(_){} }
+                    }
+                  },
+                  { text: "I've Paid", primary: true, onClick: () => {
+                      // Show persistent processing toast and keep reference
+                      try {
+                        const proc = window.showToast('Processing repayment...', { type: 'info', duration: 0 });
+                        if (txKey) window.pendingRepayToasts[txKey] = proc;
+                        // Optimistically mark transaction as completed locally so UI reflects success
+                        try {
+                          const idx = allTransactions.findIndex(t => (t.transactionId && created.transactionId && String(t.transactionId) === String(created.transactionId)) || (t._id && created._id && String(t._id) === String(created._id)));
+                          if (idx >= 0) {
+                            allTransactions[idx] = { ...allTransactions[idx], status: 'Completed' };
+                          }
+                          updateDashboardStats(); updateActivityModal(); updateRepaymentsCard();
+                        } catch (e) { console.warn('optimistic update failed', e); }
+                        window.showToast('Repayment marked as paid (pending confirmation)', { type: 'success', duration: 4000 });
+                      } catch (e) { console.error(e); window.showToast('Failed to register payment', { type: 'error', duration: 3000 }); }
+                      modal.classList.add('hidden');
+                    }
+                  }
+                ] });
+
+              } else {
+                window.showToast((j && (j.message||j.error)) || 'Failed to submit repayment', { type: 'error', duration: 4000 });
+                btn.disabled = false;
+              }
+            } catch (err) { console.error(err); alert('Repayment failed'); btn.disabled = false; }
+          });
+        });
+
+      } catch (err) { console.warn('showRepaymentModal failed', err); }
+    }
+    window.showRepaymentModal = showRepaymentModal;
+
     function initActivityModal() {
       const modal = document.getElementById('activity-modal');
       const modalContent = document.getElementById('activity-modal-content');
@@ -2629,8 +3078,8 @@
       });
 
       function showActivityHistory() {
-        const deposits = allTransactions.filter(t => t.type === 'deposit');
-        const withdrawals = allTransactions.filter(t => t.type === 'withdrawal');
+        const deposits = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'deposit');
+        const withdrawals = allTransactions.filter(t => String(t.type || '').toLowerCase() === 'withdrawal');
         const totalDeposits = deposits.reduce((sum, t) => sum + (t.amount || 0), 0);
         const totalWithdrawals = withdrawals.reduce((sum, t) => sum + (t.amount || 0), 0);
         
@@ -2659,6 +3108,28 @@
                 <span class="text-green-400 text-xs">↑ ${deposits.length} deposits</span>
               </div>
             </div>
+
+              <div id="repayments-card" class="surface-card rounded-2xl p-5 border border-gray-700">
+                <p class="label-text opacity-60 mb-2">Repayments</p>
+                <p id="repayments-value" class="value-text font-bold mb-2">$0.00</p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p id="repayments-count" class="text-xs opacity-60">Outstanding: 0</p>
+                    <p id="repayments-next" class="text-xs opacity-60">Next due: —</p>
+                  </div>
+                  <div>
+                    <button id="open-repayments" class="btn-primary px-3 py-2 rounded-lg text-sm font-medium">Open</button>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li>
+              <a href="#" id="repayment-link" class="block px-4 py-2.5 rounded-lg hover:bg-gray-800 transition font-medium">Repayments</a>
+            </li>
+                  </div>
+                </div>
+              </div>
 
             <div class="surface-card rounded-xl p-3 border border-gray-700">
               <p class="label-text opacity-60 mb-1 text-xs">Total Withdrawals</p>
@@ -3135,52 +3606,13 @@
       });
 
       function showProfileForm() {
+        // Profile settings moved to dashboard; keep modal empty to avoid showing example data
         modalContent.innerHTML = `
-          <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-bold">Profile Settings</h2>
-            <button id="close-profile-modal" class="text-2xl hover:opacity-70 transition">&times;</button>
+          <div class="p-4">
+            <h2 class="text-lg font-semibold">Profile</h2>
+            <p class="text-sm opacity-70">Manage your profile information directly on the dashboard.</p>
           </div>
-
-          <form id="profile-form" class="space-y-4">
-            <div>
-              <label for="full-name" class="block text-sm opacity-70 mb-2">Full Name</label>
-              <input type="text" id="full-name" value="John Doe" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-orange-500 transition">
-            </div>
-
-            <div>
-              <label for="email" class="block text-sm opacity-70 mb-2">Email Address</label>
-              <input type="email" id="email" value="john.doe@xapobank.com" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-orange-500 transition">
-            </div>
-
-            <div>
-              <label for="phone" class="block text-sm opacity-70 mb-2">Phone Number</label>
-              <input type="tel" id="phone" value="+1 (555) 123-4567" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-orange-500 transition">
-            </div>
-
-            <div>
-              <label for="location" class="block text-sm opacity-70 mb-2">Location</label>
-              <input type="text" id="location" value="New York, United States" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-orange-500 transition">
-            </div>
-
-            <button type="button" id="save-profile-btn" class="btn-primary w-full py-3 rounded-lg font-medium transition hover:opacity-90">
-              Save Changes
-            </button>
-          </form>
         `;
-
-        document.getElementById('close-profile-modal').addEventListener('click', () => {
-          modal.classList.add('hidden');
-        });
-
-        document.getElementById('save-profile-btn').addEventListener('click', () => {
-          const btn = document.getElementById('save-profile-btn');
-          btn.textContent = 'Saved!';
-          btn.classList.add('bg-green-600');
-          setTimeout(() => {
-            btn.textContent = 'Save Changes';
-            btn.classList.remove('bg-green-600');
-          }, 2000);
-        });
       }
     }
 
@@ -3307,7 +3739,7 @@
 
         if (uploadPassportBtn) {
           uploadPassportBtn.addEventListener('click', async () => {
-            if (!passportDataUrl) return alert('Please select a passport image first');
+            if (!passportDataUrl) return window.showToast('Please select a passport image first');
             try {
               const res = await fetch('/api/identity/upload', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
@@ -3315,13 +3747,15 @@
               });
               const data = await res.json();
               if (res.ok) {
-                alert('Passport saved');
+                window.showToast('Passport saved');
+                await fetchAndSyncUserProfile();
+                try { closeKycPrompt(); } catch (e) {}
               } else {
-                alert(data.message || 'Upload failed');
+                window.showToast(data.message || 'Upload failed');
               }
             } catch (err) {
               console.error(err);
-              alert('Upload failed');
+              window.showToast('Upload failed');
             }
           });
         }
@@ -3352,17 +3786,23 @@
           saveCapturedBtn.addEventListener('click', async () => {
             const livePreviewEl = document.getElementById('live-preview');
             const dataUrl = livePreviewEl && livePreviewEl.dataset && livePreviewEl.dataset.photo;
-            if (!dataUrl) return alert('No captured photo available. Capture first.');
+            if (!dataUrl) return window.showToast('No captured photo available. Capture first.');
             try {
               const res = await fetch('/api/identity/upload', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
                 body: JSON.stringify({ type: 'live', data: dataUrl })
               });
               const data = await res.json();
-              if (res.ok) alert('Live photo saved'); else alert(data.message || 'Save failed');
+              if (res.ok) {
+                window.showToast('Live photo saved');
+                await fetchAndSyncUserProfile();
+                try { closeKycPrompt(); } catch (e) {}
+              } else {
+                window.showToast(data.message || 'Save failed');
+              }
             } catch (err) {
               console.error(err);
-              alert('Save failed');
+              window.showToast('Save failed');
             }
           });
         }
@@ -3510,6 +3950,29 @@
         sidebar.style.transform = 'translateX(-100%)';
         sidebarOverlay.classList.add('hidden');
       });
+
+      // Sidebar: Repayments link should open the repayments UI
+      try {
+        const repaymentLink = document.getElementById('repayment-link');
+        if (repaymentLink) {
+          repaymentLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            // close sidebar
+            sidebar.style.transform = 'translateX(-100%)';
+            sidebarOverlay.classList.add('hidden');
+            // Prefer global modal helper, fallback to clicking dashboard open button or scrolling to card
+            if (window.showRepaymentModal) {
+              try { window.showRepaymentModal(); return; } catch (err) { /* ignore */ }
+            }
+            const openBtn = document.getElementById('open-repayments');
+            if (openBtn) {
+              try { openBtn.click(); return; } catch (err) {}
+            }
+            const card = document.getElementById('repayments-card');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        }
+      } catch (e) { console.warn('initSidebar repaymentLink failed', e); }
     }
 
     function initProfileCard() {
@@ -3536,8 +3999,7 @@
             return;
           }
 
-          const name = document.getElementById('email-expanded-input')?.value || '';
-          // Note: the expanded form uses email-expanded-input as email field in markup
+          const name = document.getElementById('name-expanded-input')?.value || '';
           const email = document.getElementById('email-expanded-input')?.value || '';
           const phone = document.getElementById('phone-expanded-input')?.value || '';
           const country = document.getElementById('location-expanded-input')?.value || '';
@@ -3692,6 +4154,8 @@
 
     // Initialize Data SDK and render
     initializeDataSdk().then(() => {
+      // Sync any locally simulated loans so the UI shows them immediately
+      try { syncLocalLoansToAllTransactions(); } catch (e) {}
       render();
     });
     // Setup Socket.IO client for real-time transaction updates
@@ -3705,6 +4169,7 @@
           allTransactions.unshift(tx);
           updateDashboardStats();
           updateActivityModal();
+          try { updateRepaymentsCard(); } catch (e) {}
         });
         // When a transaction is updated (e.g., admin approved), refresh data
         socket.on('transaction:updated', async (tx) => {
@@ -3756,6 +4221,7 @@
             // Recompute and re-render
             try { updateDashboardStats(); } catch (e) {}
             try { updateActivityModal(); } catch (e) {}
+            try { updateRepaymentsCard(); } catch (e) {}
           } catch (e) { console.warn('Failed to process transaction:updated', e); }
         });
         // Admin notified pending transaction (useful if user's own transaction is pending)
@@ -3867,6 +4333,4 @@
   </script>
 </body>
 </html>
-
-
 
