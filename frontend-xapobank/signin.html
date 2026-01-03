@@ -82,19 +82,27 @@
   <script>
     // tryFetch: attempt same-origin first, fall back to explicit backend URL
     async function tryFetch(path, opts){
-      const API_BASE = (window.API_BASE || window.API_URL || location.origin).replace(/\/$/, '');
-      // Try same-origin first, then explicit API_BASE if different, then throw
-      try {
-        return await fetch(path, opts);
-      } catch (e) {
+      const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
+      const origin = location.origin.replace(/\/$/, '');
+      // Prefer an explicit API_BASE when provided (static site -> backend).
+      // Fall back to same-origin requests if API_BASE is not set or the
+      // primary attempt fails with a network error.
+      const candidates = [];
+      if (API_BASE) candidates.push(API_BASE + path);
+      // always try same-origin as a fallback
+      candidates.push(path);
+
+      let lastErr = null;
+      for (const url of candidates) {
         try {
-          // if API_BASE equals origin this will be redundant but safe
-          const fallback = API_BASE + path;
-          return await fetch(fallback, opts);
-        } catch (e2) {
-          throw e2;
+          return await fetch(url, opts);
+        } catch (e) {
+          lastErr = e;
+          // try next candidate
         }
       }
+      // If no candidate succeeded, throw the last network error
+      throw lastErr || new Error('fetch failed');
     }
     // Toggle password visibility
     const toggleBtn = document.getElementById('toggle-password');
@@ -216,7 +224,11 @@
           body: JSON.stringify(formData),
         });
         let data;
-        try { data = await response.json(); } catch (e) { data = null; }
+        try { data = await response.json(); } catch (e) {
+          // If server returned non-JSON (HTML or plain text), capture it for debugging
+          try { const txt = await response.text(); console.warn('Login response not JSON:', txt); } catch (_) {}
+          data = null;
+        }
         console.debug('Login response:', { status: response.status, ok: response.ok, body: data });
         if (response.ok) {
           const tokenVal = data && data.token ? data.token : '';
