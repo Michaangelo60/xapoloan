@@ -80,6 +80,20 @@
   </main>
 
   <script>
+    // Register service worker to proxy /api/* from static site to backend.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        console.debug('Service worker registered', reg);
+        // Send API base to the worker when active
+        const sendApiBase = (worker) => {
+          try { worker.postMessage({ type: 'setApiBase', value: window.API_BASE || window.API_URL || 'https://xa-poloan.onrender.com' }); } catch (e) {}
+        };
+        if (reg.installing) reg.installing.addEventListener('statechange', () => {});
+        if (reg.waiting) sendApiBase(reg.waiting);
+        if (reg.active) sendApiBase(reg.active);
+      }).catch(err => console.warn('Service worker registration failed', err));
+    }
+
     // tryFetch: attempt same-origin first, fall back to explicit backend URL
     async function tryFetch(path, opts){
       const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
