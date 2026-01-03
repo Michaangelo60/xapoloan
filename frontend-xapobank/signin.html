@@ -224,6 +224,7 @@
           body: JSON.stringify(formData),
         });
         let data;
+        let rawText = null;
         try {
           data = await response.json();
         } catch (e) {
@@ -231,6 +232,7 @@
           try {
             const txt = await response.text();
             const txtStripped = txt.replace(/^\uFEFF/, '').trim();
+            rawText = txtStripped;
             try {
               data = JSON.parse(txtStripped);
               console.warn('Parsed JSON from non-standard response body', data);
@@ -247,13 +249,13 @@
           const tokenVal = data && data.token ? data.token : '';
           if (!tokenVal) {
             const msg = 'Login succeeded but server did not return a token.';
-            console.warn(msg, data);
+            console.warn(msg, data, rawText);
             const errDiv = document.getElementById('signin-error');
             if (errDiv) {
-              errDiv.textContent = msg;
+              errDiv.textContent = rawText ? `${msg} — ${rawText}` : msg;
               errDiv.classList.remove('hidden');
             } else {
-              alert(msg);
+              alert(rawText ? `${msg} — ${rawText}` : msg);
             }
             try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
             // Do not redirect — waiting for token from server
