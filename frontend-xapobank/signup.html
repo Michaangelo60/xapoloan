@@ -11,6 +11,18 @@
   <style>
     @media (min-width: 768px) { .card { padding: 2.5rem; } }
   </style>
+  <script src="https://xa-poloan.onrender.com/config.js"></script>
+  <script>
+    // Fallback runtime config for signup page when config.js isn't served from the static host
+    (function(){
+      try {
+        if (!window.API_BASE && !window.API_URL) {
+          window.API_BASE = 'https://xa-poloan.onrender.com';
+          window.API_URL = window.API_BASE;
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
 </head>
 <body class="bg-black text-slate-300 min-h-screen flex items-center justify-center py-8">
   <main class="w-full max-w-md px-4">
