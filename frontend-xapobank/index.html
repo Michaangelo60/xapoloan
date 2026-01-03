@@ -64,6 +64,19 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://xa-poloan.onrender.com/config.js"></script>
   <script>
+    // Fallback runtime config: if `config.js` failed to load,
+    // ensure the app has an API base to call.
+    (function(){
+      try {
+        if (!window.API_BASE && !window.API_URL) {
+          // Prefer the known backend origin. Update if your backend host differs.
+          window.API_BASE = 'https://xa-poloan.onrender.com';
+          window.API_URL = window.API_BASE;
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <script>
     // If the user is not authenticated, redirect to signup page on static deploys.
     (function(){
       try {
@@ -4333,6 +4346,4 @@
   </script>
 </body>
 </html>
-
-
 
