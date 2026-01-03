@@ -16,6 +16,16 @@
     @media (min-width: 768px) {
       .card { padding: 2.5rem; }
     }
+    /* Toast notifications (centered, responsive) */
+    #toast-container { position: fixed; left: 50%; top: 12%; transform: translateX(-50%); z-index: 9999; display:flex; flex-direction:column; gap:0.5rem; align-items:center; width: 100%; pointer-events: none; }
+    #toast-container .toast { pointer-events: auto; max-width: 90vw; width: auto; }
+    .toast { background: rgba(30,30,30,0.95); color: #e6e6e6; padding: 0.75rem 1rem; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.4); min-width: 220px; max-width: 420px; font-size:0.95rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem; box-sizing:border-box; }
+    .toast.info { border-left: 4px solid #0ea5e9; }
+    .toast.success { border-left: 4px solid #10b981; }
+    .toast.error { border-left: 4px solid #ef4444; }
+    .toast .toast-actions { margin-left: 0.5rem; display:flex; gap:0.5rem; }
+    .toast .btn { background:transparent; border:1px solid rgba(255,255,255,0.06); color:inherit; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    .toast .btn.primary { background:#0ea5e9; color:#051124; border:none; }
   </style>
 </head>
 <body class="bg-black text-slate-300 min-h-screen flex items-center justify-center py-8">
@@ -72,11 +82,14 @@
   <script>
     // tryFetch: attempt same-origin first, fall back to explicit backend URL
     async function tryFetch(path, opts){
+      const API_BASE = (window.API_BASE || window.API_URL || location.origin).replace(/\/$/, '');
+      // Try same-origin first, then explicit API_BASE if different, then throw
       try {
         return await fetch(path, opts);
       } catch (e) {
         try {
-          const fallback = 'https://backend-wnsn.onrender.com' + path;
+          // if API_BASE equals origin this will be redundant but safe
+          const fallback = API_BASE + path;
           return await fetch(fallback, opts);
         } catch (e2) {
           throw e2;
@@ -98,25 +111,85 @@
       }
     });
 
-    // Forgot password flow: prompt for email and call backend
+    // Lightweight non-blocking toast UI
+    (function(){
+      const container = document.createElement('div');
+      container.id = 'toast-container';
+      document.body.appendChild(container);
+
+      window.showToast = function(message, opts = {}) {
+        const { type = 'info', duration = 4000, actions = [] } = opts;
+        return new Promise((resolve) => {
+              const t = document.createElement('div');
+              t.className = `toast ${type}`;
+              const text = document.createElement('div');
+              text.style.flex = '1';
+              text.textContent = message;
+              t.appendChild(text);
+              const actionsWrap = document.createElement('div');
+              actionsWrap.className = 'toast-actions';
+              if (Array.isArray(actions) && actions.length) {
+                actions.forEach(a => {
+                  const btn = document.createElement('button');
+                  btn.className = 'btn' + (a.primary ? ' primary' : '');
+                  btn.textContent = a.text || 'OK';
+                  btn.addEventListener('click', () => {
+                    clear();
+                    resolve(a.value || a.text || 'action');
+                  });
+                  actionsWrap.appendChild(btn);
+                });
+                t.appendChild(actionsWrap);
+              }
+              // close control
+              const closeBtn = document.createElement('button');
+              closeBtn.className = 'btn';
+              closeBtn.textContent = '×';
+              closeBtn.title = 'Close';
+              closeBtn.style.marginLeft = '8px';
+              closeBtn.addEventListener('click', () => { clear(); resolve('closed'); });
+              t.appendChild(closeBtn);
+
+          let timeout = null;
+          function clear() {
+            if (timeout) clearTimeout(timeout);
+            try { t.remove(); } catch (e) {}
+          }
+
+          container.appendChild(t);
+          if (!actions.length) {
+            timeout = setTimeout(() => { clear(); resolve('timeout'); }, duration);
+          }
+        });
+      };
+    })();
+
+    // Forgot password flow: non-blocking confirmation via toast
     document.getElementById('forgot-link').addEventListener('click', async (e) => {
       e.preventDefault();
       const emailInput = document.getElementById('email');
-      let email = emailInput.value && emailInput.value.trim();
+      let email = (emailInput.value && emailInput.value.trim()) || '';
       if (!email) {
-        email = prompt('Enter your account email to receive password reset instructions:');
+        email = prompt('Enter your registered account email to receive password reset instructions:');
         if (!email) return;
       }
+
+      const choice = await window.showToast(`Send password reset instructions to ${email}?`, { type: 'info', duration: 0, actions: [ { text: 'Cancel', value: 'cancel' }, { text: 'Send', value: 'send', primary: true } ] });
+      if (choice !== 'send') return;
+
       try {
         const res = await tryFetch('/api/auth/forgot', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
-        const data = await res.json();
-        alert(data.message || "If that email exists, we've sent instructions");
+        if (res && res.ok) {
+          await window.showToast('Password reset instructions have been sent to your registered email address. Please check your inbox.', { type: 'success', duration: 5000 });
+        } else {
+          await window.showToast('If that email is registered with us, you will receive password reset instructions shortly.', { type: 'info', duration: 5000 });
+        }
       } catch (err) {
         console.error(err);
-        alert('Unable to send reset email — try again later');
+        await window.showToast('Unable to send reset email — try again later', { type: 'error', duration: 5000 });
       }
     });
 
