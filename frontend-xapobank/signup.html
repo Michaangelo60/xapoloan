@@ -735,7 +735,8 @@ Our Agreement supersedes and extinguishes all previous agreements, promises, ass
       const country = document.getElementById('country').value;
       const payload = { fullName, email, password, phone, country };
       try {
-        const res = await fetch('/api/auth/register', {
+        const API_BASE = (window.API_BASE || window.API_URL || location.origin).replace(/\/$/, '');
+        const res = await fetch(API_BASE + '/api/auth/register', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
         let data;
@@ -744,6 +745,20 @@ Our Agreement supersedes and extinguishes all previous agreements, promises, ass
           // Auto-login: save token and user then show success popout before redirect
           if (data && data.token) localStorage.setItem('token', data.token);
           if (data && data.data) { try { localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); } }
+          // If register didn't return a token, try to login explicitly using credentials
+          if ((!data || !data.token) && payload.email && payload.password) {
+            try {
+              const loginRes = await fetch(API_BASE + '/api/auth/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: payload.email, password: payload.password })
+              });
+              const loginJ = await loginRes.json().catch(()=>null);
+              if (loginRes.ok && loginJ && (loginJ.token || loginJ.data?.token)) {
+                const tokenVal = loginJ.token || loginJ.data.token;
+                localStorage.setItem('token', tokenVal);
+                if (loginJ.data) try { localStorage.setItem('user', JSON.stringify(loginJ.data)); } catch(e){}
+              }
+            } catch (e) { console.warn('Auto-login after register failed', e); }
+          }
           const pop = document.getElementById('signup-success');
           const cont = document.getElementById('signup-continue');
           if (pop) pop.classList.remove('hidden');
