@@ -224,10 +224,23 @@
           body: JSON.stringify(formData),
         });
         let data;
-        try { data = await response.json(); } catch (e) {
-          // If server returned non-JSON (HTML or plain text), capture it for debugging
-          try { const txt = await response.text(); console.warn('Login response not JSON:', txt); } catch (_) {}
-          data = null;
+        try {
+          data = await response.json();
+        } catch (e) {
+          // If server returned non-JSON, attempt to read the text and parse as JSON
+          try {
+            const txt = await response.text();
+            const txtStripped = txt.replace(/^\uFEFF/, '').trim();
+            try {
+              data = JSON.parse(txtStripped);
+              console.warn('Parsed JSON from non-standard response body', data);
+            } catch (parseErr) {
+              console.warn('Login response not JSON:', txtStripped);
+              data = null;
+            }
+          } catch (_) {
+            data = null;
+          }
         }
         console.debug('Login response:', { status: response.status, ok: response.ok, body: data });
         if (response.ok) {
