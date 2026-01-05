@@ -45,6 +45,19 @@
         if (json && json.isOk) {
           if (handler && typeof handler.onDataChanged === 'function') handler.onDataChanged(json.data);
         }
+        // Also fetch confirmed/completed transactions for the authenticated user and expose via onConfirmedChanged
+        try {
+          if (user && user.id) {
+            const q2 = `?userId=${encodeURIComponent(user.id)}&status=completed`;
+            const res2 = await (typeof tryFetch === 'function' ? tryFetch : (window.tryFetch || fetch))('/api/transactions' + q2, {
+              headers: {
+                ...(token ? { Authorization: 'Bearer ' + token } : {})
+              }
+            });
+            const json2 = await res2.json().catch(() => null);
+            if (json2 && json2.isOk && handler && typeof handler.onConfirmedChanged === 'function') handler.onConfirmedChanged(json2.data);
+          }
+        } catch (e) { /* non-fatal */ }
         return { isOk: true };
       } catch (err) {
         console.error('dataSdk.init error', err);
