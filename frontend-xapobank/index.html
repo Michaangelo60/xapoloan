@@ -220,6 +220,7 @@
           _btcPrice = Math.round(price * 100) / 100;
           _btcPriceLastUpdated = Date.now();
           try { console.debug('BTC price refreshed', _btcPrice); } catch(e){}
+          try { if (typeof updateMarketUI === 'function') updateMarketUI(); } catch(e){}
         } else {
           console.warn('BTC price fetch returned invalid value', price);
         }
@@ -1147,16 +1148,16 @@
               <div class="grid grid-cols-1 gap-6">
                 <div>
                   <p class="stats-label opacity-60 mb-2">Current Price</p>
-                  <p class="stats-value font-bold">$86,406.00</p>
-                  <span class="text-green-400 sub-value">+0.05%</span>
+                  <p class="stats-value font-bold">$<span id="market-current-price">${getCurrentBTCPrice().toLocaleString()}</span></p>
+                  <span id="market-price-change" class="text-green-400 sub-value">+0.00%</span>
                 </div>
                 <div>
                   <p class="stats-label opacity-60 mb-2">Market Cap</p>
-                  <p class="stats-value font-bold">$1725.12B</p>
+                  <p class="stats-value font-bold">$<span id="market-marketcap">-</span></p>
                 </div>
                 <div>
                   <p class="stats-label opacity-60 mb-2">24h Volume</p>
-                  <p class="stats-value font-bold">$43.67B</p>
+                  <p class="stats-value font-bold">$<span id="market-volume">-</span></p>
                 </div>
               </div>
             </div>
