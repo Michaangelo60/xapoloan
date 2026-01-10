@@ -4174,7 +4174,11 @@
     function setupSocket(){
       try {
         const token = localStorage.getItem('token');
-        const socket = io({ auth: { token } });
+        // Prefer an explicit backend origin when provided by runtime config so the
+        // client connects to the correct Socket.IO server when frontend and backend
+        // are hosted on different origins (e.g., Vercel frontend + Render backend).
+        const backendOrigin = (window.API_BASE || window.API_URL || window.location.origin).replace(/\/$/, '');
+        const socket = io(backendOrigin, { path: '/socket.io', auth: { token } });
         socket.on('connect', () => console.log('socket connected'));
         socket.on('transaction:created', (tx) => {
           // insert into allTransactions and update UI
