@@ -1157,6 +1157,18 @@
                 <!-- Market Cap and 24h Volume removed per request -->
               </div>
             </div>
+          
+            <div class="surface-card rounded-2xl p-5 border border-gray-700 mb-6">
+              <h2 class="font-bold mb-3">Stocks</h2>
+              <p class="opacity-70 mb-4 text-sm">Choose any stock to invest. Deposits are bought on crypto and converted automatically to USDC; admin confirmation required before funds are available.</p>
+              <div class="flex items-center justify-between">
+                <div class="font-medium">Invest in stocks</div>
+                <div class="flex gap-2">
+                  <button id="open-stocks-short" class="btn-primary px-3 py-2 rounded-lg text-sm">Open Stocks</button>
+                  <button id="stock-deposit-short" class="btn-secondary px-3 py-2 rounded-lg text-sm">Deposit</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1172,6 +1184,11 @@
         <!-- Trade Modal (Buy/Sell) -->
         <div id="trade-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center hidden" style="z-index: 1000;">
           <div id="trade-modal-content" class="surface-card rounded-t-3xl sm:rounded-2xl p-6 border border-gray-700 w-full sm:max-w-md sm:mx-4 max-h-[90%] overflow-y-auto"></div>
+        </div>
+
+        <!-- Stock Deposit Modal -->
+        <div id="stock-deposit-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-end sm:items-center justify-center hidden" style="z-index: 1000;">
+          <div id="stock-deposit-modal-content" class="surface-card rounded-t-3xl sm:rounded-2xl p-6 border border-gray-700 w-full sm:max-w-lg sm:mx-4 max-h-[90%] overflow-y-auto"></div>
         </div>
 
         <!-- Withdraw Modal -->
@@ -4387,6 +4404,7 @@
                 <div class="flex gap-2">
                   <button data-symbol="${s.symbol}" class="btn-primary px-3 py-1 rounded-lg btn-buy">Buy</button>
                   <button data-symbol="${s.symbol}" class="btn-secondary px-3 py-1 rounded-lg btn-sell">Sell</button>
+                  <button data-symbol="${s.symbol}" class="btn-secondary px-3 py-1 rounded-lg btn-deposit">Deposit</button>
                 </div>
               </div>
             `).join('')}
@@ -4483,8 +4501,102 @@
         }
       }
 
+      // Open deposit modal for stocks
+      function openStockDepositModal(symbol) {
+        const modal = document.getElementById('stock-deposit-modal');
+        const content = document.getElementById('stock-deposit-modal-content');
+        if (!modal || !content) return;
+        content.innerHTML = `
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-base font-bold">Deposit to ${symbol ? symbol : 'Stocks'}</h2>
+            <button id="close-stock-deposit" class="text-xl hover:opacity-70 transition">&times;</button>
+          </div>
+          <p class="opacity-70 mb-4 text-sm">Transfers are bought on crypto and converted automatically to USDC. Admin confirmation is required before funds become available.</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs opacity-60 mb-1">Crypto</label>
+              <select id="stock-deposit-currency" class="w-full bg-transparent border border-gray-700 rounded-lg p-2">
+                <option value="BTC">BTC</option>
+                <option value="USDT">USDT</option>
+                <option value="USDC">USDC</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs opacity-60 mb-1">Amount (in selected crypto)</label>
+              <input id="stock-deposit-amount" type="number" min="0.00000001" step="0.00000001" placeholder="Enter amount" class="w-full bg-transparent border border-gray-700 rounded-lg p-2" />
+            </div>
+            <div class="flex gap-2">
+              <button id="confirm-stock-deposit" class="btn-primary flex-1 py-2 rounded-lg">Confirm Deposit</button>
+              <button id="cancel-stock-deposit" class="btn-secondary flex-1 py-2 rounded-lg">Cancel</button>
+            </div>
+            <p id="stock-deposit-feedback" class="text-sm opacity-70"></p>
+          </div>
+        `;
+        modal.classList.remove('hidden');
+        setTimeout(()=>{
+          const close = document.getElementById('close-stock-deposit'); if (close) close.addEventListener('click', ()=> modal.classList.add('hidden'));
+          const cancel = document.getElementById('cancel-stock-deposit'); if (cancel) cancel.addEventListener('click', ()=> modal.classList.add('hidden'));
+          const confirm = document.getElementById('confirm-stock-deposit'); if (confirm) confirm.addEventListener('click', ()=> handleStockDepositConfirm(symbol));
+        },30);
+      }
+
+      async function handleStockDepositConfirm(symbol) {
+        const fb = document.getElementById('stock-deposit-feedback');
+        const currency = (document.getElementById('stock-deposit-currency') || {}).value || 'BTC';
+        const raw = Number(document.getElementById('stock-deposit-amount').value || 0);
+        if (!raw || raw <= 0) { if (fb) fb.textContent = 'Enter a valid amount.'; return; }
+        if (fb) fb.textContent = 'Submitting deposit...';
+        // convert crypto to USD (basic: use BTC live price, otherwise assume 1:1 for stablecoins)
+        let usd = 0;
+        try {
+          if (currency === 'BTC') {
+            usd = raw * getCurrentBTCPrice();
+          } else {
+            usd = raw * 1.0; // USDT/USDC ~1:1
+          }
+        } catch (e) { usd = 0; }
+        const token = localStorage.getItem('token') || '';
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const tx = {
+          type: 'deposit',
+          subtype: 'stock',
+          originalCurrency: currency,
+          originalAmount: Number(raw),
+          usdAmount: Number((usd || 0).toFixed(2)),
+          symbol: symbol || null,
+          status: 'Pending',
+          note: 'Crypto conversion to USDC pending admin confirmation',
+          timestamp: new Date().toISOString(),
+          transactionId: `SD${Date.now()}`,
+          userId: user && (user.id || user._id) ? (user.id || user._id) : undefined,
+          userEmail: user && user.email ? user.email : undefined
+        };
+        try {
+          let result = null;
+          if (window.dataSdk && window.dataSdk.create) {
+            result = await window.dataSdk.create(tx);
+          } else {
+            const res = await fetch('/api/transactions', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(tx) });
+            const j = await res.json().catch(()=>({}));
+            result = (res.ok && j && j.isOk) ? { isOk: true, data: j.data || null } : { isOk: false, error: j || 'request-failed' };
+          }
+          if (result && (result.isOk || result.ok)) {
+            if (fb) fb.textContent = 'Deposit submitted. Awaiting admin confirmation.';
+            try { const modal = document.getElementById('stock-deposit-modal'); if (modal) setTimeout(()=> modal.classList.add('hidden'), 900); } catch(e){}
+            try { allTransactions = allTransactions.concat([tx]); updateDashboardStats(); updateActivityModal(); } catch(e){}
+          } else {
+            if (fb) fb.textContent = 'Failed to submit deposit.' + (result && result.error ? (' ' + JSON.stringify(result.error)) : '');
+          }
+        } catch (e) {
+          if (fb) fb.textContent = 'Error submitting deposit: ' + (e && e.message ? e.message : e);
+        }
+      }
+
       // wire Stocks link (best-effort; render may replace DOM so we also add delegation below)
-      try { const sLink = document.getElementById('stocks-link'); if (sLink) sLink.addEventListener('click', (e)=>{ e.preventDefault(); render && render(); window.openStocksModal && window.openStocksModal(); }); } catch(e){}
+        try { const sLink = document.getElementById('stocks-link'); if (sLink) sLink.addEventListener('click', (e)=>{ e.preventDefault(); render && render(); window.openStocksModal && window.openStocksModal(); }); } catch(e){}
+        // quick buttons in dashboard
+        try { const openShort = document.getElementById('open-stocks-short'); if (openShort) openShort.addEventListener('click', (e)=>{ e.preventDefault(); window.openStocksModal && window.openStocksModal(); }); } catch(e){}
+        try { const depShort = document.getElementById('stock-deposit-short'); if (depShort) depShort.addEventListener('click', (e)=>{ e.preventDefault(); window.openStockDepositModal && window.openStockDepositModal(); }); } catch(e){}
       // expose for console/testing
       window.openTradeModal = openTradeModal;
     })();
