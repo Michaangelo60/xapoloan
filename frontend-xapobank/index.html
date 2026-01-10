@@ -4346,52 +4346,34 @@
         { symbol: 'NVDA', name: 'NVIDIA Corporation' }
       ];
 
-      // Fetch quotes from Yahoo Finance unofficial endpoint
+      // Fetch quotes via backend proxy /api/stocks/quotes to avoid CORS and centralize provider usage
       async function fetchStockQuotes(symbols){
         if (!symbols || !symbols.length) return {};
-        const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbols.join(','));
-        const parseResult = async (res) => {
-          try {
-            const j = await res.json();
-            const out = {};
-            if (j && j.quoteResponse && Array.isArray(j.quoteResponse.result)){
-              j.quoteResponse.result.forEach(q=>{
-                out[q.symbol] = {
-                  price: (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null,
-                  changePct: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null
-                };
-              });
-            }
-            return out;
-          } catch (e) {
-            return null;
-          }
-        };
-
-        // Try direct fetch first
         try {
-          const res = await fetch(url, {cache: 'no-store'});
+          const q = symbols.join(',');
+          const url = (window.API_BASE || '') + '/api/stocks/quotes?symbols=' + encodeURIComponent(q);
+          const res = await fetch(url, { cache: 'no-store' });
           if (res && res.ok) {
-            const out = await parseResult(res);
-            if (out) return out;
+            const j = await res.json().catch(()=>null);
+            if (j && j.ok && j.data) return j.data;
           }
-        } catch (err) {
-          console.debug('Direct stock fetch failed', err && err.message ? err.message : err);
-        }
-
-        // Fallback: use an open CORS proxy (AllOrigins) to bypass CORS issues
+        } catch (e) { console.debug('Backend stock proxy fetch failed', e && e.message ? e.message : e); }
+        // final fallback: try public Yahoo directly (may fail due to CORS)
         try {
-          const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-          const pres = await fetch(proxy, {cache: 'no-store'});
-          if (pres && pres.ok) {
-            const out = await parseResult(pres);
-            if (out) return out;
+          const fallback = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbols.join(','));
+          const r = await fetch(fallback, { cache: 'no-store' });
+          const j = await r.json().catch(()=>null);
+          const out = {};
+          if (j && j.quoteResponse && Array.isArray(j.quoteResponse.result)){
+            j.quoteResponse.result.forEach(q=>{
+              out[q.symbol] = {
+                price: (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null,
+                changePct: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null
+              };
+            });
           }
-        } catch (err) {
-          console.debug('Proxy stock fetch failed', err && err.message ? err.message : err);
-        }
-
-        return {};
+          return out;
+        } catch (e) { return {}; }
       }
 
       function formatPrice(p){ return (p === null || p === undefined) ? '--' : ('$' + Number(p).toFixed(2)); }
