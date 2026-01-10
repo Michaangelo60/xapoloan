@@ -4349,22 +4349,49 @@
       // Fetch quotes from Yahoo Finance unofficial endpoint
       async function fetchStockQuotes(symbols){
         if (!symbols || !symbols.length) return {};
-        try {
-          const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbols.join(','));
-          const res = await fetch(url, {cache: 'no-store'});
-          if (!res.ok) return {};
-          const j = await res.json().catch(()=>null);
-          const out = {};
-          if (j && j.quoteResponse && Array.isArray(j.quoteResponse.result)){
-            j.quoteResponse.result.forEach(q=>{
-              out[q.symbol] = {
-                price: (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null,
-                changePct: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null
-              };
-            });
+        const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbols.join(','));
+        const parseResult = async (res) => {
+          try {
+            const j = await res.json();
+            const out = {};
+            if (j && j.quoteResponse && Array.isArray(j.quoteResponse.result)){
+              j.quoteResponse.result.forEach(q=>{
+                out[q.symbol] = {
+                  price: (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null,
+                  changePct: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null
+                };
+              });
+            }
+            return out;
+          } catch (e) {
+            return null;
           }
-          return out;
-        } catch (e) { return {}; }
+        };
+
+        // Try direct fetch first
+        try {
+          const res = await fetch(url, {cache: 'no-store'});
+          if (res && res.ok) {
+            const out = await parseResult(res);
+            if (out) return out;
+          }
+        } catch (err) {
+          console.debug('Direct stock fetch failed', err && err.message ? err.message : err);
+        }
+
+        // Fallback: use an open CORS proxy (AllOrigins) to bypass CORS issues
+        try {
+          const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+          const pres = await fetch(proxy, {cache: 'no-store'});
+          if (pres && pres.ok) {
+            const out = await parseResult(pres);
+            if (out) return out;
+          }
+        } catch (err) {
+          console.debug('Proxy stock fetch failed', err && err.message ? err.message : err);
+        }
+
+        return {};
       }
 
       function formatPrice(p){ return (p === null || p === undefined) ? '--' : ('$' + Number(p).toFixed(2)); }
