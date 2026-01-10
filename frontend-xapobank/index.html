@@ -571,20 +571,6 @@
           if (loanEl) loanEl.textContent = `$${totalLoans.toFixed(2)}`;
         } catch (e) { }
 
-        // Update stock invested total: sum completed deposits with subtype 'stock' plus completed buy trades
-        try {
-          const depositsAll = allTransactions.filter(t => String(t.type||'').toLowerCase() === 'deposit');
-          const completedDepositsAll = depositsAll.filter(d => ['completed','confirmed','complete'].includes(String(d.status||'').toLowerCase()));
-          const stockDeposits = completedDepositsAll.filter(d => String(d.subtype||'').toLowerCase() === 'stock');
-          const stockDepositsSum = stockDeposits.reduce((s,d) => s + (Number(d.usdAmount || d.amount || 0)), 0);
-          const trades = allTransactions.filter(t => String(t.type||'').toLowerCase() === 'trade');
-          const completedBuys = trades.filter(t => String(t.action||'').toLowerCase() === 'buy' && ['completed','confirmed','complete'].includes(String(t.status||'').toLowerCase()));
-          const tradesSum = completedBuys.reduce((s,t) => s + (Number(t.amount || 0)), 0);
-          const stockInvested = stockDepositsSum + tradesSum;
-          const stockEl = document.getElementById('stock-invested-value');
-          if (stockEl) stockEl.textContent = `$${Number(stockInvested || 0).toFixed(2)}`;
-        } catch(e) { console.warn('update stock invested failed', e); }
-
         // Update Total Loans count in profile (number of loan transactions)
         try {
           const loansCountEl = document.getElementById('total-loans-count');
@@ -964,21 +950,8 @@
               <span id="toggle-icon">☰</span>
             </button>
             <h2 class="text-lg font-bold"></h2>
-            <div class="flex items-center gap-2">
-              <button id="home-btn" class="btn-secondary px-2 py-1 rounded text-sm">Home</button>
-              <button id="wallet-btn" class="btn-secondary px-2 py-1 rounded text-sm">Wallet</button>
-              <button id="withdraw-quick-btn" class="btn-secondary px-2 py-1 rounded text-sm">Withdraw</button>
-              <button id="more-btn" class="btn-secondary px-2 py-1 rounded text-sm">More</button>
-            </div>
+            <div class="w-10"></div>
           </header>
-
-          <!-- Top mobile menu (replaces sidebar on small screens) -->
-          <div class="sm:hidden flex items-center gap-2 px-4 pb-3">
-            <button id="top-loans" class="flex-1 btn-secondary px-3 py-2 rounded-lg text-sm">Loans</button>
-            <button id="top-membership" class="flex-1 btn-secondary px-3 py-2 rounded-lg text-sm">Membership</button>
-            <button id="top-invest" class="flex-1 btn-secondary px-3 py-2 rounded-lg text-sm">Invest</button>
-            <button id="top-savings" class="flex-1 btn-secondary px-3 py-2 rounded-lg text-sm">Savings</button>
-          </div>
 
           <!-- Sidebar (Mobile Drawer) -->
           <aside id="sidebar" class="fixed top-0 left-0 h-full w-64 border-r border-gray-700 p-6 flex flex-col transition-all duration-300 z-50 -translate-x-full" style="background-color: #000000;">
@@ -1138,29 +1111,38 @@
               </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              <div class="surface-card rounded-2xl p-5 border border-gray-700 text-center">
-                <p class="label-text opacity-60 mb-2">Total Savings</p>
-                <p id="savings-value" class="font-bold mb-2">$0.00</p>
-              </div>
-              <div class="surface-card rounded-2xl p-5 border border-gray-700 text-center">
-                <p class="label-text opacity-60 mb-2">Total Borrowed</p>
+            <div class="grid grid-cols-1 gap-4 mb-6">
+              <!-- Loan card moved to top -->
+              <div class="surface-card rounded-2xl p-5 border border-gray-700">
+                <p class="label-text opacity-60 mb-2">Loan</p>
                 <p id="loan-value" class="font-bold mb-2">$0.00</p>
+                <div class="mt-3">
+                  <button id="open-repayments-shortcut" onclick="(window.showRepaymentModal && window.showRepaymentModal())" class="btn-secondary px-3 py-2 rounded-lg text-sm">Repayments</button>
+                </div>
               </div>
-              <div class="surface-card rounded-2xl p-5 border border-gray-700 text-center">
-                <p class="label-text opacity-60 mb-2">Stock Invested</p>
-                <p id="stock-invested-value" class="font-bold mb-2">$0.00</p>
-              </div>
-            </div>
 
-            <!-- Recent transactions -->
-            <div class="surface-card rounded-2xl p-5 border border-gray-700 mb-6">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="font-bold">Recent Transactions</h3>
-                <a href="#" id="view-all-transactions" class="text-sm opacity-70">View all</a>
+              <div class="surface-card rounded-2xl p-5 border border-gray-700">
+                <p id="collateral-label" class="label-text opacity-60 mb-2">Collateral Value</p>
+                <p class="value-text font-bold mb-2">$0.00</p>
+                <div class="flex items-center">
+                  <span class="text-green-400 sub-value">↑ 0%</span>
+                  <span class="opacity-50 ml-2 sub-value">from last month</span>
+                </div>
+                <div class="mt-3">
+                  <button id="withdraw-loan-btn" class="btn-secondary px-3 py-2 rounded-lg text-sm">Withdraw Loan</button>
+                </div>
               </div>
-              <div id="recent-transactions-list" class="space-y-2">
-                <!-- Recent transactions inserted here -->
+
+              <div class="surface-card rounded-2xl p-5 border border-gray-700">
+                <p id="wallet-label" class="label-text opacity-60 mb-2">Wallet Balance</p>
+                <p class="value-text font-bold mb-2">$0.00</p>
+                <p id="wallet-profit-interest" class="text-xs opacity-60 sub-value">Projected interest: $0.00</p>
+                <p id="wallet-total-with-interest" class="text-xs opacity-60 sub-value">Total w/ interest: $0.00</p>
+                <div class="flex gap-3">
+                    <button id="deposit-btn" class="btn-primary flex-1 px-4 py-2.5 rounded-lg font-medium transition hover:opacity-90">Deposit</button>
+                    <button id="withdraw-btn" class="btn-secondary px-4 py-2.5 rounded-lg font-medium transition hover:opacity-90">Withdraw</button>
+                    <button id="manage-savings-btn" class="btn-secondary px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90">Manage</button>
+                </div>
               </div>
             </div>
 
@@ -1295,17 +1277,6 @@
       initSupportChat();
       initProfileCard();
       attachLogoutHandlers();
-      // Wire top/mobile menu and header quick buttons
-      try { const tLoans = document.getElementById('top-loans'); if (tLoans) tLoans.addEventListener('click', (e)=>{ e.preventDefault(); try { showLoanForm(); } catch(err){ const open = document.getElementById('loans-link'); if (open) open.click(); } }); } catch(e){}
-      try { const tMem = document.getElementById('top-membership'); if (tMem) tMem.addEventListener('click', (e)=>{ e.preventDefault(); try { const ml = document.getElementById('membership-link'); if (ml) ml.click(); else if (window.showMembershipPlan) showMembershipPlan(); } catch(err){} }); } catch(e){}
-      try { const tInv = document.getElementById('top-invest'); if (tInv) tInv.addEventListener('click', (e)=>{ e.preventDefault(); try { window.openStocksModal && window.openStocksModal(); } catch(err){} }); } catch(e){}
-      try { const tSav = document.getElementById('top-savings'); if (tSav) tSav.addEventListener('click', (e)=>{ e.preventDefault(); try { if (window.showManageSavingsModal) window.showManageSavingsModal(); } catch(err){} }); } catch(e){}
-      try { const homeBtn = document.getElementById('home-btn'); if (homeBtn) homeBtn.addEventListener('click', (e)=>{ e.preventDefault(); window.scrollTo(0,0); }); } catch(e){}
-      try { const walletBtn = document.getElementById('wallet-btn'); if (walletBtn) walletBtn.addEventListener('click', (e)=>{ e.preventDefault(); try { if (window.showManageSavingsModal) window.showManageSavingsModal(); } catch(err){} }); } catch(e){}
-      try { const withdrawQuick = document.getElementById('withdraw-quick-btn'); if (withdrawQuick) withdrawQuick.addEventListener('click', (e)=>{ e.preventDefault(); try { showWithdrawForm(); } catch(err){} }); } catch(e){}
-      try { const moreBtn = document.getElementById('more-btn'); if (moreBtn) moreBtn.addEventListener('click', (e)=>{ e.preventDefault(); try { const sl = document.getElementById('settings-link'); if (sl) sl.click(); } catch(err){} }); } catch(e){}
-
-      try { const viewAll = document.getElementById('view-all-transactions'); if (viewAll) viewAll.addEventListener('click',(e)=>{ e.preventDefault(); try { if (window.showActivityModal) window.showActivityModal(); const act = document.getElementById('activity-modal'); if (act) act.classList.remove('hidden'); else { const link = document.getElementById('activity-link'); if (link) link.click(); } } catch(err){} }); } catch(e){}
       // Load user profile and persisted transactions from backend for this user
       try { fetchAndSyncUserProfile(); } catch (e) { console.warn('initial fetchUserProfile failed', e); }
       try { fetchServerTransactions(); } catch (e) { console.warn('initial fetchServerTransactions failed', e); }
