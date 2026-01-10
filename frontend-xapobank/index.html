@@ -220,26 +220,14 @@
         localStorage.removeItem('user');
       } catch (e) { console.warn('logout storage cleanup failed', e); }
 
-      // Try a few candidate paths for the signin page and redirect to the first that exists.
-      const candidates = [];
+      // Simple, robust redirect to the signin page. Use a relative path
+      // so hosting on Render or static hosts works regardless of origin.
       try {
-        if (window.location && window.location.origin && window.location.protocol.startsWith('http')) {
-          candidates.push(window.location.origin + '/signsignup/index.html');
-        }
-      } catch (e) {}
-      candidates.push('/signsignup/index.html', '/signsignup/', 'signsignup/index.html', './signsignup/index.html');
-
-      for (const c of candidates) {
-        try {
-          const res = await fetch(c, { method: 'HEAD' });
-          if (res && res.ok) { window.location.href = c; return; }
-        } catch (e) {
-          // ignore and try next
-        }
+        window.location.href = 'signin.html';
+      } catch (e) {
+        // As a last resort, try absolute root path
+        window.location.href = '/signin.html';
       }
-
-      // Fallback: go to root index which should prompt signin flow.
-      window.location.href = '/signsignup/index.html';
     }
 
     function addLogoutButtonToSidebar() {
