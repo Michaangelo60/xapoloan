@@ -4369,19 +4369,56 @@
 
       function formatPrice(p){ return (p === null || p === undefined) ? '--' : ('$' + Number(p).toFixed(2)); }
 
+      const STOCK_QUOTES = {};
+      const STOCK_PRICE_HISTORY = {};
+
       async function updateStocksUI(){
         const symbols = STOCKS.map(s=>s.symbol);
         const quotes = await fetchStockQuotes(symbols);
         STOCKS.forEach(s=>{
           const id = 'stock-price-' + s.symbol;
           const el = document.getElementById(id);
+          const sparkId = 'stock-spark-' + s.symbol;
+          const sparkEl = document.getElementById(sparkId);
+          const q = quotes[s.symbol] || null;
+          // store latest quote
+          STOCK_QUOTES[s.symbol] = q;
+          // maintain history
+          STOCK_PRICE_HISTORY[s.symbol] = STOCK_PRICE_HISTORY[s.symbol] || [];
+          if (q && typeof q.price === 'number') {
+            STOCK_PRICE_HISTORY[s.symbol].push(Number(q.price));
+            if (STOCK_PRICE_HISTORY[s.symbol].length > 40) STOCK_PRICE_HISTORY[s.symbol].shift();
+          }
           if (!el) return;
-          const q = quotes[s.symbol];
-          if (!q) { el.textContent = '--'; return; }
+          if (!q || q.price == null) {
+            el.textContent = '--';
+            if (sparkEl) sparkEl.innerHTML = '';
+            el.style.color = '';
+            return;
+          }
           el.textContent = formatPrice(q.price) + (q.changePct != null ? (' (' + (q.changePct >= 0 ? '+' : '') + q.changePct.toFixed(2) + '%)') : '');
-          if (q.changePct != null) {
-            el.style.color = q.changePct >= 0 ? '#32d583' : '#ff6b6b';
-          } else { el.style.color = ''; }
+          el.style.color = (q.changePct != null) ? (q.changePct >= 0 ? '#32d583' : '#ff6b6b') : '';
+          // render sparkline
+          if (sparkEl) {
+            const data = STOCK_PRICE_HISTORY[s.symbol] || [];
+            if (data.length > 1) {
+              const w = 120, h = 28, pad = 2;
+              const min = Math.min(...data);
+              const max = Math.max(...data);
+              const range = (max - min) || 1;
+              const step = w / (data.length - 1);
+              let path = '';
+              data.forEach((v,i)=>{
+                const x = Math.round(i * step);
+                const y = Math.round(h - pad - ((v - min) / range) * (h - pad*2));
+                path += (i===0?`M ${x} ${y}`:` L ${x} ${y}`);
+              });
+              const stroke = (data[data.length-1] >= data[0]) ? '#32d583' : '#ff6b6b';
+              sparkEl.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${path}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></path></svg>`;
+            } else {
+              sparkEl.innerHTML = '';
+            }
+          }
         });
       }
 
@@ -4400,7 +4437,13 @@
           <div class="space-y-3">
             ${STOCKS.map(s => `
               <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700">
-                <div class="font-medium">${s.symbol} <span class="text-sm opacity-70">${s.name}</span></div>
+                <div>
+                  <div class="font-medium">${s.symbol} <span class="text-sm opacity-70">${s.name}</span></div>
+                  <div class="text-sm opacity-60 mt-1">
+                    <span id="stock-price-${s.symbol}">--</span>
+                    <span id="stock-spark-${s.symbol}" class="ml-3 inline-block align-middle"></span>
+                  </div>
+                </div>
                 <div class="flex gap-2">
                   <button data-symbol="${s.symbol}" class="btn-primary px-3 py-1 rounded-lg btn-buy">Buy</button>
                   <button data-symbol="${s.symbol}" class="btn-secondary px-3 py-1 rounded-lg btn-sell">Sell</button>
@@ -4413,12 +4456,13 @@
         modal.classList.remove('hidden');
         setTimeout(()=>{
           const close = document.getElementById('close-stocks-modal'); if (close) close.addEventListener('click', ()=> { modal.classList.add('hidden'); if (__stocksInterval) { clearInterval(__stocksInterval); __stocksInterval = null; } });
-          document.querySelectorAll('.btn-buy').forEach(b=> b.addEventListener('click', e=> openTradeModal(e.target.getAttribute('data-symbol'), 'buy')));
-          document.querySelectorAll('.btn-sell').forEach(b=> b.addEventListener('click', e=> openTradeModal(e.target.getAttribute('data-symbol'), 'sell')));
+          document.querySelectorAll('.btn-buy').forEach(b=> b.addEventListener('click', e=> openTradeModal(e.currentTarget.getAttribute('data-symbol'), 'buy')));
+          document.querySelectorAll('.btn-sell').forEach(b=> b.addEventListener('click', e=> openTradeModal(e.currentTarget.getAttribute('data-symbol'), 'sell')));
+          document.querySelectorAll('.btn-deposit').forEach(b=> b.addEventListener('click', e=> openStockDepositModal(e.currentTarget.getAttribute('data-symbol'))));
           // initial fetch + interval
           updateStocksUI();
           if (__stocksInterval) clearInterval(__stocksInterval);
-          __stocksInterval = setInterval(updateStocksUI, 15000);
+          __stocksInterval = setInterval(updateStocksUI, 5000);
         },30);
       }
 
@@ -4451,9 +4495,17 @@
         `;
         modal.classList.remove('hidden');
         setTimeout(()=>{
-          const close = document.getElementById('close-trade-modal'); if (close) close.addEventListener('click', ()=> modal.classList.add('hidden'));
-          const cancel = document.getElementById('cancel-trade'); if (cancel) cancel.addEventListener('click', ()=> modal.classList.add('hidden'));
-          const confirm = document.getElementById('confirm-trade'); if (confirm) confirm.addEventListener('click', ()=> handleTradeConfirm(symbol, action));
+            const close = document.getElementById('close-trade-modal'); if (close) close.addEventListener('click', ()=> modal.classList.add('hidden'));
+            const cancel = document.getElementById('cancel-trade'); if (cancel) cancel.addEventListener('click', ()=> modal.classList.add('hidden'));
+            const confirm = document.getElementById('confirm-trade'); if (confirm) confirm.addEventListener('click', ()=> handleTradeConfirm(symbol, action));
+            // Prefill price if we have a live quote
+            try {
+              const cur = (window.STOCK_QUOTES && window.STOCK_QUOTES[symbol]) ? window.STOCK_QUOTES[symbol] : (STOCK_QUOTES && STOCK_QUOTES[symbol] ? STOCK_QUOTES[symbol] : null);
+              if (cur && typeof cur.price === 'number') {
+                const priceInput = document.getElementById('trade-price');
+                if (priceInput) priceInput.value = Number(cur.price).toFixed(2);
+              }
+            } catch(e){}
         },30);
       }
 
@@ -4591,6 +4643,8 @@
           if (fb) fb.textContent = 'Error submitting deposit: ' + (e && e.message ? e.message : e);
         }
       }
+      // expose deposit opener for quick buttons
+      window.openStockDepositModal = openStockDepositModal;
 
       // wire Stocks link (best-effort; render may replace DOM so we also add delegation below)
         try { const sLink = document.getElementById('stocks-link'); if (sLink) sLink.addEventListener('click', (e)=>{ e.preventDefault(); render && render(); window.openStocksModal && window.openStocksModal(); }); } catch(e){}
