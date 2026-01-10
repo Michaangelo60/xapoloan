@@ -4334,16 +4334,16 @@
     // Stocks list and trade handlers
     (function(){
       const STOCKS = [
-        { symbol: 'ARM', name: 'Arm Holdings plc' },
-        { symbol: 'MRVL', name: 'Marvell Technology, Inc.' },
-        { symbol: 'SE', name: 'Sea Limited' },
-        { symbol: 'VST', name: 'Vistra Corp.' },
-        { symbol: 'AMD', name: 'Advanced Micro Devices, Inc.' },
-        { symbol: 'SPOT', name: 'Spotify Technology S.A.' },
-        { symbol: 'BABA', name: 'Alibaba Group Holding Limited' },
-        { symbol: 'NFLX', name: 'Netflix, Inc.' },
-        { symbol: 'AVGO', name: 'Broadcom Inc.' },
-        { symbol: 'NVDA', name: 'NVIDIA Corporation' }
+        { symbol: 'ARM', name: 'Arm Holdings plc', logo: 'https://logo.clearbit.com/arm.com?size=80' },
+        { symbol: 'MRVL', name: 'Marvell Technology, Inc.', logo: 'https://logo.clearbit.com/marvell.com?size=80' },
+        { symbol: 'SE', name: 'Sea Limited', logo: 'https://logo.clearbit.com/sea.com?size=80' },
+        { symbol: 'VST', name: 'Vistra Corp.', logo: 'https://logo.clearbit.com/vistracorp.com?size=80' },
+        { symbol: 'AMD', name: 'Advanced Micro Devices, Inc.', logo: 'https://logo.clearbit.com/amd.com?size=80' },
+        { symbol: 'SPOT', name: 'Spotify Technology S.A.', logo: 'https://logo.clearbit.com/spotify.com?size=80' },
+        { symbol: 'BABA', name: 'Alibaba Group Holding Limited', logo: 'https://logo.clearbit.com/alibaba.com?size=80' },
+        { symbol: 'NFLX', name: 'Netflix, Inc.', logo: 'https://logo.clearbit.com/netflix.com?size=80' },
+        { symbol: 'AVGO', name: 'Broadcom Inc.', logo: 'https://logo.clearbit.com/broadcom.com?size=80' },
+        { symbol: 'NVDA', name: 'NVIDIA Corporation', logo: 'https://logo.clearbit.com/nvidia.com?size=80' }
       ];
 
       // Fetch quotes via backend proxy /api/stocks/quotes to avoid CORS and centralize provider usage
@@ -4446,11 +4446,14 @@
           <div class="space-y-3">
             ${STOCKS.map(s => `
               <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700">
-                <div>
-                  <div class="font-medium">${s.symbol} <span class="text-sm opacity-70">${s.name}</span></div>
-                  <div class="text-sm opacity-60 mt-1">
-                    <span id="stock-price-${s.symbol}">--</span>
-                    <span id="stock-spark-${s.symbol}" class="ml-3 inline-block align-middle"></span>
+                <div class="flex items-center gap-3">
+                  <img src="${s.logo}" alt="${s.symbol} logo" class="h-8 w-8 rounded-full flex-shrink-0" onerror="this.style.display='none'" />
+                  <div>
+                    <div class="font-medium">${s.symbol} <span class="text-sm opacity-70">${s.name}</span></div>
+                    <div class="text-sm opacity-60 mt-1">
+                      <span id="stock-price-${s.symbol}">--</span>
+                      <span id="stock-spark-${s.symbol}" class="ml-3 inline-block align-middle"></span>
+                    </div>
                   </div>
                 </div>
                 <div class="flex gap-2">
