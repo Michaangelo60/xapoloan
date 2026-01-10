@@ -4426,11 +4426,27 @@
         }
       }
 
-      // wire Stocks link
-      try { const sLink = document.getElementById('stocks-link'); if (sLink) sLink.addEventListener('click', (e)=>{ e.preventDefault(); render && render(); window.openStocksModal(); }); } catch(e){}
+      // wire Stocks link (best-effort; render may replace DOM so we also add delegation below)
+      try { const sLink = document.getElementById('stocks-link'); if (sLink) sLink.addEventListener('click', (e)=>{ e.preventDefault(); render && render(); window.openStocksModal && window.openStocksModal(); }); } catch(e){}
       // expose for console/testing
       window.openTradeModal = openTradeModal;
     })();
+
+    // Delegate clicks to handle Stocks link even after render() replaces the sidebar
+    document.addEventListener('click', function delegatedStocksClick(e){
+      try {
+        const target = e.target.closest && e.target.closest('#stocks-link');
+        if (!target) return;
+        e.preventDefault();
+        // ensure UI is rendered then open modal
+        try { render && render(); } catch (err) {}
+        if (typeof window.openStocksModal === 'function') {
+          try { window.openStocksModal(); } catch(e) { console.warn('openStocksModal error', e); }
+        } else {
+          setTimeout(()=>{ if (typeof window.openStocksModal === 'function') try { window.openStocksModal(); } catch(e){} }, 100);
+        }
+      } catch (err) { /* ignore */ }
+    });
     document.addEventListener('DOMContentLoaded', function() {
         const token = localStorage.getItem('token');
 
