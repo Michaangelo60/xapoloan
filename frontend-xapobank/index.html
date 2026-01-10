@@ -114,13 +114,28 @@
         document.head.appendChild(s);
       }
 
-      // Try same-origin socket path first (Vercel proxy). If unavailable, fall back to CDN.
-      loadScript('socket.io/socket.io.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
-      setTimeout(function(){
-        if (typeof io === 'undefined') {
+      // Try same-origin socket path first (Vercel proxy). If unavailable or it returns
+      // a non-JS response, fall back to CDN. Use a HEAD request to verify before
+      // inserting the script to avoid injecting HTML error pages which would throw
+      // "Unexpected identifier 'POST'" when parsed as JS.
+      (function tryLoadLocalSocketIo(){
+        const localSrc = 'socket.io/socket.io.js';
+        try {
+          fetch(localSrc, { method: 'HEAD' }).then(resp => {
+            const ct = resp.headers.get('content-type') || '';
+            if (resp.ok && /javascript|text\/x-javascript|application\/x-javascript|text\/javascript/i.test(ct)) {
+              loadScript(localSrc, function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
+            } else {
+              // fallback to CDN
+              loadScript('https://cdn.socket.io/4.6.1/socket.io.min.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
+            }
+          }).catch(() => {
+            loadScript('https://cdn.socket.io/4.6.1/socket.io.min.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
+          });
+        } catch (e) {
           loadScript('https://cdn.socket.io/4.6.1/socket.io.min.js', function(){ try { if (window.__onSocketIoReady) window.__onSocketIoReady(); } catch(e){} });
         }
-      }, 900);
+      })();
     })();
   </script>
   <script src="_sdk/edit_panel_sdk.js"></script>
