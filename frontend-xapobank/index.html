@@ -194,19 +194,43 @@
     let isDataSdkInitialized = false;
     // Live BTC price cache (used to show BTC -> USD equivalents)
     let _btcPrice = 86406;
+    let _btcPriceLastUpdated = null;
+    async function fetchFromCoinGecko() {
+      const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+      const j = await r.json();
+      if (j && j.bitcoin && j.bitcoin.usd) return Number(j.bitcoin.usd);
+      throw new Error('coingecko: unexpected response');
+    }
+    async function fetchFromCoinCap() {
+      // CoinCap provides a simple endpoint; use as fallback
+      const r = await fetch('https://api.coincap.io/v2/assets/bitcoin');
+      const j = await r.json();
+      if (j && j.data && j.data.priceUsd) return Number(j.data.priceUsd);
+      throw new Error('coincap: unexpected response');
+    }
+
     async function refreshBtcPrice() {
       try {
-        const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
-        const j = await r.json();
-        if (j && j.bitcoin && j.bitcoin.usd) {
-          _btcPrice = Number(j.bitcoin.usd);
+        let price = null;
+        try { price = await fetchFromCoinGecko(); } catch (e) { console.warn('CoinGecko fetch failed', e && e.message ? e.message : e); }
+        if (!price) {
+          try { price = await fetchFromCoinCap(); } catch (e) { console.warn('CoinCap fetch failed', e && e.message ? e.message : e); }
         }
-      } catch (e) { console.warn('Failed to fetch BTC price', e); }
+        if (price && Number.isFinite(price) && price > 0) {
+          _btcPrice = Math.round(price * 100) / 100;
+          _btcPriceLastUpdated = Date.now();
+          try { console.debug('BTC price refreshed', _btcPrice); } catch(e){}
+        } else {
+          console.warn('BTC price fetch returned invalid value', price);
+        }
+      } catch (e) {
+        console.warn('Failed to refresh BTC price', e && e.message ? e.message : e);
+      }
     }
     function getCurrentBTCPrice() { return _btcPrice || 86406; }
-    // refresh periodically
+    // refresh periodically (every 15s) and update immediately
     refreshBtcPrice();
-    setInterval(refreshBtcPrice, 30000);
+    setInterval(refreshBtcPrice, 15000);
 
     // Format an ISO date or Date into 'Mon YYYY' (e.g. "Jan 2024").
     function formatMonthYear(d) {
