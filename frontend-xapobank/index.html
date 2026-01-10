@@ -1162,7 +1162,10 @@
               <h2 class="font-bold mb-3">Stocks</h2>
               <p class="opacity-70 mb-4 text-sm">Choose any stock to invest. Deposits are bought on crypto and converted automatically to USDC; admin confirmation required before funds are available.</p>
               <div class="flex items-center justify-between">
-                <div class="font-medium">Invest in stocks</div>
+                <div class="flex items-center gap-3">
+                  <div class="font-medium">Invest in stocks</div>
+                  <div id="nvda-ticker" class="text-sm opacity-80 px-3 py-1 rounded bg-gray-900" style="min-width:140px;text-align:center">NVDA —</div>
+                </div>
                 <div class="flex gap-2">
                   <button id="open-stocks-short" class="btn-primary px-3 py-2 rounded-lg text-sm">Open Stocks</button>
                   <button id="stock-deposit-short" class="btn-secondary px-3 py-2 rounded-lg text-sm">Deposit</button>
@@ -4479,6 +4482,29 @@
       }
 
       window.openStocksModal = renderStocksModal;
+      // NVDA live ticker widget: polls quotes and updates header card
+      let __nvdaInterval = null;
+      async function updateNVDAWidget(){
+        try {
+          const data = await fetchStockQuotes(['NVDA']);
+          const q = data && (data.NVDA || data.NVDA.toUpperCase && data.NVDA);
+          const el = document.getElementById('nvda-ticker');
+          if (!el) return;
+          if (!q || q.price == null) { el.textContent = 'NVDA —'; return; }
+          const price = Number(q.price || q.last || q.raw && q.raw.regularMarketPrice) || 0;
+          const change = Number(q.changePct || (q.raw && q.raw.regularMarketChangePercent) || 0);
+          const color = change >= 0 ? '#32d583' : '#ff6b6b';
+          const arrow = change >= 0 ? '▲' : '▼';
+          el.innerHTML = '<strong style="letter-spacing:0.2px">NVDA</strong> <span style="margin-left:6px">$' + (price.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})) + '</span> <span style="color:' + color + '; margin-left:6px">' + arrow + Math.abs(change).toFixed(2) + '%</span>';
+        } catch (e) { console.warn('NVDA update failed', e); }
+      }
+      function startNVDAWidget(){
+        try { updateNVDAWidget(); } catch(e){}
+        if (__nvdaInterval) clearInterval(__nvdaInterval);
+        __nvdaInterval = setInterval(updateNVDAWidget, 5000);
+      }
+      // start immediately
+      startNVDAWidget();
 
       function openTradeModal(symbol, action) {
         const modal = document.getElementById('trade-modal');
