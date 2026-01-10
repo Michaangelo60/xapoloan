@@ -4286,24 +4286,32 @@
                 return response.json();
             })
             .then(data => {
-              if (data.success) {
-                console.log('User data:', data.data);
-                try { localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
-                // Now that we have the user data, initialize the dashboard
-                initializeDataSdk().then(() => {
-                  render();
+                  if (data.success) {
+                    console.log('User data:', data.data);
+                    try { localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
+                    // Now that we have the user data, initialize the dashboard
+                    initializeDataSdk().then(() => {
+                      render();
+                    });
+                  } else {
+                        // Handle case where success is false, but response was ok
+                        throw new Error(data.message || 'Authentication failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Authentication error:', error);
+                    const msg = (error && error.message) ? String(error.message).toLowerCase() : '';
+                    const isInvalidToken = msg.includes('invalid') || msg.includes('unauthorized') || (error && error.status === 401);
+                    if (isInvalidToken) {
+                      // Token is invalid → clear it and redirect to signin
+                      localStorage.removeItem('token');
+                      window.location.href = 'signin.html';
+                    } else {
+                      // Network or other transient error: preserve token and continue in degraded mode
+                      console.warn('Auth check failed (network/other). Preserving token; initializing UI in degraded mode.');
+                      try { initializeDataSdk().then(() => { render(); }); } catch (e) { console.warn('Init after auth-failure failed', e); }
+                    }
                 });
-              } else {
-                    // Handle case where success is false, but response was ok
-                    throw new Error(data.message || 'Authentication failed');
-                }
-            })
-            .catch(error => {
-                console.error('Authentication error:', error);
-                // If token is invalid or any other error, redirect to signin
-                localStorage.removeItem('token');
-                window.location.href = '/signsignup/signin.html';
-            });
         }
 
         // Example of a logout button
@@ -4311,36 +4319,11 @@
         if(logoutBtn) {
             logoutBtn.addEventListener('click', () => {
               localStorage.removeItem('token');
-              window.location.href = '/signsignup/index.html';
+              window.location.href = 'signin.html';
             });
         }
     });
-
-(function(){
-  const token = localStorage.getItem('token');
-  if (!token) {
-    // no token → force to signin
-    window.location.href = '/signsignup/signin.html';
-    return;
-  }
-  // optional: verify token by calling a protected endpoint and store user
-  fetch('/api/auth/me', {
-    headers: { Authorization: 'Bearer ' + token }
-  }).then(async r=>{
-    if (!r.ok) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/signsignup/signin.html';
-      return;
-    }
-    try {
-      const json = await r.json();
-      if (json && json.success && json.data) {
-        try { localStorage.setItem('user', JSON.stringify(json.data)); } catch(e){console.warn('Could not store user', e);}
-      }
-    } catch(e) { console.warn('Could not parse /me response', e); }
-  });
-})();
+    
 
   </script>
 </body>
