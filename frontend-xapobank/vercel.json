@@ -4,8 +4,8 @@
     { "src": "**", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "https://backend-wnsn.onrender.com/api/$1" },
-    { "src": "/socket.io/(.*)", "dest": "https://backend-wnsn.onrender.com/socket.io/$1" },
+    { "src": "/api/(.*)", "dest": "https://xa-poloan.onrender.com/api/$1" },
+    { "src": "/socket.io/(.*)", "dest": "https://xa-poloan.onrender.com/socket.io/$1" },
     { "src": "/signin.html", "dest": "/signin.html" },
     { "src": "/signup.html", "dest": "/signup.html" },
     { "src": "/signsignup/(.*)", "dest": "/signsignup/$1" },
