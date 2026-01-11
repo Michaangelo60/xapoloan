@@ -4373,10 +4373,23 @@
         } catch (e) { console.warn('updateSidebarStocks failed', e); }
       }
 
-      // toggle display
+      // toggle display (direct attach for present elements)
       try {
         const link = document.getElementById('stocks-link');
         if (link) link.addEventListener('click', (e)=>{ e.preventDefault(); const w = document.getElementById('sidebar-stocks'); if (w) w.classList.toggle('hidden'); });
+      } catch (e) {}
+
+      // delegated handler so clicks work even if sidebar is re-rendered
+      try {
+        document.addEventListener('click', function delegatedStocksToggle(e){
+          try {
+            const t = e.target && e.target.closest ? e.target.closest('#stocks-link') : null;
+            if (!t) return;
+            e.preventDefault();
+            const w = document.getElementById('sidebar-stocks');
+            if (w) w.classList.toggle('hidden');
+          } catch (err) { /* ignore */ }
+        });
       } catch (e) {}
 
       // start updater
