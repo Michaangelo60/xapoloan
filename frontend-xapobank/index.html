@@ -997,7 +997,20 @@
                 <li>
                   <a href="#" id="profile-link" class="block px-4 py-2.5 rounded-lg hover:bg-gray-800 transition font-medium">Profile</a>
                 </li>
-                <!-- Stocks link removed -->
+                <li>
+                  <a href="#" id="stocks-link" class="block px-4 py-2.5 rounded-lg hover:bg-gray-800 transition font-medium">Stocks</a>
+                  <div id="sidebar-stocks" class="px-4 py-2 text-sm opacity-80 hidden">
+                    <div class="space-y-1">
+                      <div class="flex justify-between items-center"><span>AAPL</span><span id="stock-sidebar-AAPL">259.37 <span id="stock-change-AAPL" class="text-xs opacity-60">0.13%</span></span></div>
+                      <div class="flex justify-between items-center"><span>MSFT</span><span id="stock-sidebar-MSFT">478.96 <span id="stock-change-MSFT" class="text-xs opacity-60">0.18%</span></span></div>
+                      <div class="flex justify-between items-center"><span>AMZN</span><span id="stock-sidebar-AMZN">247.54 <span id="stock-change-AMZN" class="text-xs opacity-60">0.51%</span></span></div>
+                      <div class="flex justify-between items-center"><span>NVDA</span><span id="stock-sidebar-NVDA">184.97 <span id="stock-change-NVDA" class="text-xs opacity-60">0.04%</span></span></div>
+                      <div class="border-t border-gray-700 mt-2 pt-2"></div>
+                      <div class="flex justify-between items-center"><span>ETH/USD</span><span id="stock-sidebar-ETH-USD">3,099.43 <span id="stock-change-ETH-USD" class="text-xs opacity-60">0.26%</span></span></div>
+                      <div class="flex justify-between items-center"><span>ADA/USD</span><span id="stock-sidebar-ADA-USD">0.390968 <span id="stock-change-ADA-USD" class="text-xs opacity-60">0.20%</span></span></div>
+                    </div>
+                  </div>
+                </li>
                 <li>
                   <a href="#" id="settings-link" class="block px-4 py-2.5 rounded-lg hover:bg-gray-800 transition font-medium">Settings</a>
                 </li>
@@ -4306,7 +4319,70 @@
     } else {
       window.__onSocketIoReady = window.__onSocketIoReady || function(){ try { setupSocket(); } catch(e){} };
     }
-    // Stocks UI removed
+    // Sidebar Stocks widget + live updater
+    (function(){
+      const SIDEBAR_STOCKS = ['AAPL','MSFT','AMZN','NVDA','ETH-USD','ADA-USD'];
+
+      async function fetchSidebarQuotes(symbols){
+        if (!symbols || !symbols.length) return {};
+        try {
+          const q = symbols.join(',');
+          const url = (window.API_BASE || '') + '/api/stocks/quotes?symbols=' + encodeURIComponent(q);
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res && res.ok) {
+            const j = await res.json().catch(()=>null);
+            if (j && j.ok && j.data) return j.data;
+          }
+        } catch (e) { console.debug('Sidebar stock proxy fetch failed', e && e.message ? e.message : e); }
+        // fallback: try Yahoo Finance public endpoint
+        try {
+          const fallback = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbols.join(','));
+          const r = await fetch(fallback, { cache: 'no-store' });
+          const j = await r.json().catch(()=>null);
+          const out = {};
+          if (j && j.quoteResponse && Array.isArray(j.quoteResponse.result)){
+            j.quoteResponse.result.forEach(q=>{
+              out[q.symbol] = {
+                price: (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null,
+                changePct: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null
+              };
+            });
+          }
+          return out;
+        } catch (e) { return {}; }
+      }
+
+      async function updateSidebarStocks(){
+        try {
+          const quotes = await fetchSidebarQuotes(SIDEBAR_STOCKS);
+          SIDEBAR_STOCKS.forEach(sym => {
+            try {
+              const el = document.getElementById('stock-sidebar-' + sym);
+              const ch = document.getElementById('stock-change-' + sym);
+              const q = quotes[sym] || quotes[(sym.replace('-', '/'))] || null;
+              if (!el) return;
+              if (!q || q.price == null) { el.textContent = '--'; if (ch) ch.textContent = ''; el.style.color = ''; return; }
+              const price = Number(q.price);
+              const change = (q.changePct != null) ? Number(q.changePct) : 0;
+              if (ch) ch.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+              el.firstChild && el.firstChild.nodeType === 3 ? null : null;
+              el.innerHTML = (price >= 1000 ? Number(price).toLocaleString() : Number(price).toFixed(6)) + ' <span id="stock-change-' + sym + '" class="text-xs opacity-60">' + (change >= 0 ? '+' : '') + change.toFixed(2) + '%</span>';
+              el.style.color = (change >= 0) ? '#32d583' : '#ff6b6b';
+            } catch (e) { /* ignore per-symbol errors */ }
+          });
+        } catch (e) { console.warn('updateSidebarStocks failed', e); }
+      }
+
+      // toggle display
+      try {
+        const link = document.getElementById('stocks-link');
+        if (link) link.addEventListener('click', (e)=>{ e.preventDefault(); const w = document.getElementById('sidebar-stocks'); if (w) w.classList.toggle('hidden'); });
+      } catch (e) {}
+
+      // start updater
+      try { updateSidebarStocks(); } catch(e){}
+      setInterval(updateSidebarStocks, 5000);
+    })();
     document.addEventListener('DOMContentLoaded', function() {
         const token = localStorage.getItem('token');
 
