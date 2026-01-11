@@ -4,6 +4,7 @@
     { "src": "**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/", "dest": "/signsignup/signup.html" },
     { "src": "/api/(.*)", "dest": "https://xa-poloan.onrender.com/api/$1" },
     { "src": "/socket.io/(.*)", "dest": "https://xa-poloan.onrender.com/socket.io/$1" },
     { "src": "/signin.html", "dest": "/signin.html" },
