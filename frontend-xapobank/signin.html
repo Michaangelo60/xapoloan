@@ -274,9 +274,21 @@
             try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
             // Do not redirect — waiting for token from server
           } else {
-            localStorage.setItem('token', tokenVal);
+            console.debug('Received token from server (redacted):', typeof tokenVal === 'string' ? '[REDACTED]' : tokenVal);
+            // Attempt to persist token in localStorage, fall back to cookie if storage is blocked
+            try {
+              localStorage.setItem('token', tokenVal);
+            } catch (err) {
+              console.warn('localStorage.setItem failed — falling back to cookie', err && err.message ? err.message : err);
+              try {
+                // set a conservative path so client scripts on the site can read it
+                document.cookie = 'token=' + encodeURIComponent(tokenVal) + '; path=/; max-age=' + (7 * 24 * 60 * 60);
+              } catch (e) {
+                console.warn('Cookie fallback failed', e && e.message ? e.message : e);
+              }
+            }
             try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
-            console.debug('Token stored, redirecting to /');
+            console.debug('Token persisted (storage fallback attempted), redirecting to /');
             window.location.href = '/';
           }
         } else {
