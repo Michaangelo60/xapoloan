@@ -95,38 +95,27 @@
     }
 
     // tryFetch: attempt same-origin first, fall back to explicit backend URL
-    async function tryFetch(path, opts = {}){
+    async function tryFetch(path, opts){
       const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
-      // Prefer same-origin (so service worker proxy is used) and fall back to explicit backend origin.
-      const candidates = [path];
+      const origin = location.origin.replace(/\/$/, '');
+      // Prefer an explicit API_BASE when provided (static site -> backend).
+      // Fall back to same-origin requests if API_BASE is not set or the
+      // primary attempt fails with a network error.
+      const candidates = [];
       if (API_BASE) candidates.push(API_BASE + path);
-
-      // Ensure headers include Accept: application/json unless caller overrides
-      const defaultHeaders = { 'Accept': 'application/json' };
-      const headers = new Headers(defaultHeaders);
-      if (opts.headers) {
-        try {
-          const provided = new Headers(opts.headers);
-          for (const [k, v] of provided.entries()) headers.set(k, v);
-        } catch (e) {
-          // fallback for plain objects
-          try {
-            Object.entries(opts.headers).forEach(([k, v]) => headers.set(k, v));
-          } catch (_) {}
-        }
-      }
+      // always try same-origin as a fallback
+      candidates.push(path);
 
       let lastErr = null;
       for (const url of candidates) {
         try {
-          console.debug('tryFetch attempting', url);
-          const init = Object.assign({}, opts, { headers });
-          return await fetch(url, init);
+          return await fetch(url, opts);
         } catch (e) {
           lastErr = e;
           // try next candidate
         }
       }
+      // If no candidate succeeded, throw the last network error
       throw lastErr || new Error('fetch failed');
     }
     // Toggle password visibility
@@ -250,8 +239,6 @@
         });
         let data;
         let rawText = null;
-        const contentTypeHeader = (response && response.headers && typeof response.headers.get === 'function') ? (response.headers.get('content-type') || '') : '';
-        const isJsonResponse = /application\/(json|vnd\.api\+json)/i.test(contentTypeHeader);
         try {
           data = await response.json();
         } catch (e) {
@@ -271,27 +258,9 @@
             data = null;
           }
         }
-        console.debug('Login response:', { status: response.status, ok: response.ok, isJsonResponse, body: data });
-        // Treat non-JSON successful HTTP responses as failures (likely an HTML error page returned)
-        if (!isJsonResponse) {
-          const errDiv = document.getElementById('signin-error');
-          const msg = 'Unexpected non-JSON response from server — possible proxy or in-app browser interference.';
-          const detail = rawText || (response && response.statusText) || '';
-          if (errDiv) { errDiv.textContent = detail ? `${msg} — ${detail}` : msg; errDiv.classList.remove('hidden'); } else { alert(detail ? `${msg} — ${detail}` : msg); }
-          // Also attempt direct backend probe (diagnostic) but do not treat as success here
-          (async function(){ try { const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, ''); if (!API_BASE) return; const r = await fetch(API_BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData), cache: 'no-store' }); console.warn('Direct probe status', r.status); } catch(e){ console.warn('Direct probe failed', e); } })();
-          throw new Error('non-json-response');
-        }
-
+        console.debug('Login response:', { status: response.status, ok: response.ok, body: data });
         if (response.ok) {
-          // If the API follows the JSON pattern, ensure it signals success property
           const tokenVal = data && data.token ? data.token : '';
-          if (data && typeof data.success !== 'undefined' && !data.success) {
-            const errDiv = document.getElementById('signin-error');
-            const msg = (data && (data.message || data.error)) ? (data.message || data.error) : 'Sign-in failed';
-            if (errDiv) { errDiv.textContent = msg; errDiv.classList.remove('hidden'); } else { alert(msg); }
-            throw new Error('api-reported-failure');
-          }
           if (!tokenVal) {
             const msg = 'Login succeeded but server did not return a token.';
             console.warn(msg, data, rawText);
