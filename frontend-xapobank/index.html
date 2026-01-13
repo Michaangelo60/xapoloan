@@ -638,7 +638,8 @@
         // Use a relative API path so this works whether the frontend is served from the same server or proxied.
         const url = new URL('/api/transactions', window.location.origin);
         if (uid) url.searchParams.set('userId', uid);
-        const res = await fetch(url.toString(), { headers: { ...(token ? { 'Authorization': 'Bearer ' + token } : {}) } });
+        const fetchFn = (typeof tryFetch === 'function' ? tryFetch : fetch);
+        const res = await fetchFn(url.toString(), { headers: { ...(token ? { 'Authorization': 'Bearer ' + token } : {}) } });
         if (!res.ok) return;
         const j = await res.json();
         if (j && j.isOk && Array.isArray(j.data)) {
@@ -667,7 +668,7 @@
       try {
         const token = localStorage.getItem('token') || '';
         if (!token) return;
-        const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        const res = await (typeof tryFetch === 'function' ? tryFetch : fetch)('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
         if (!res.ok) return;
         const j = await res.json().catch(() => ({}));
         const userData = j.data || j.user || (j.isOk && j.data) || (j.success && j.data) || j;
