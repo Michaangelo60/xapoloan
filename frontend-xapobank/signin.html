@@ -9,6 +9,7 @@
   <link rel="icon" href="/xapo_logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/xapo_logo.svg">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script async src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     /* Minor overrides for better touch targets on small devices */
     input[type="email"], input[type="password"] { font-size: 1rem; }
@@ -39,6 +40,9 @@
         </header>
 
         <div id="signin-error" class="hidden mb-4 text-sm text-red-400"></div>
+        <div id="open-external-wrap" class="hidden mb-4 text-sm text-center">
+          <button id="open-external-btn" class="px-3 py-2 bg-slate-700 text-white rounded">Open in external browser</button>
+        </div>
         <form id="signin-form" class="space-y-4" autocomplete="on">
           <div>
                      <label for="email" class="block text-sm font-medium text-slate-300 mb-1">Email</label>
@@ -93,6 +97,40 @@
         if (reg.active) sendApiBase(reg.active);
       }).catch(err => console.warn('Service worker registration failed', err));
     }
+
+    // If running inside Telegram Web App or other in-app browsers, offer an
+    // explicit button to open the page in the external/system browser which
+    // often avoids storage and proxy restrictions imposed by the host app.
+    (function setupTelegramOpenExternal(){
+      function show() {
+        try {
+          const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
+          const isTelegram = !!(window.Telegram && window.Telegram.WebApp) || /Telegram/i.test(ua);
+          if (!isTelegram) return;
+          // Notify Telegram SDK the web app is ready (if available)
+          try { if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.ready === 'function') window.Telegram.WebApp.ready(); } catch (e) {}
+          const wrap = document.getElementById('open-external-wrap');
+          if (!wrap) return;
+          wrap.classList.remove('hidden');
+          const btn = document.getElementById('open-external-btn');
+          if (!btn) return;
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            try {
+              if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+                window.Telegram.WebApp.openTelegramLink(window.location.href);
+              } else {
+                window.open(window.location.href, '_blank');
+              }
+            } catch (err) {
+              try { window.open(window.location.href, '_blank'); } catch (_) { location.href = window.location.href; }
+            }
+          });
+        } catch (e) { console.warn('Telegram external open setup failed', e); }
+      }
+      // Run after DOMContentLoaded (script may be inserted before DOM ready)
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show); else show();
+    })();
 
     // tryFetch: attempt to call backend, preferring explicit backend origin when
     // inside Telegram or iOS in-app browsers to avoid HTML fallback pages.
