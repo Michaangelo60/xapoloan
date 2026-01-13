@@ -239,6 +239,8 @@
         });
         let data;
         let rawText = null;
+        const contentTypeHeader = (response && response.headers && typeof response.headers.get === 'function') ? (response.headers.get('content-type') || '') : '';
+        const isJsonResponse = /application\/(json|vnd\.api\+json)/i.test(contentTypeHeader);
         try {
           data = await response.json();
         } catch (e) {
@@ -258,9 +260,27 @@
             data = null;
           }
         }
-        console.debug('Login response:', { status: response.status, ok: response.ok, body: data });
+        console.debug('Login response:', { status: response.status, ok: response.ok, isJsonResponse, body: data });
+        // Treat non-JSON successful HTTP responses as failures (likely an HTML error page returned)
+        if (!isJsonResponse) {
+          const errDiv = document.getElementById('signin-error');
+          const msg = 'Unexpected non-JSON response from server — possible proxy or in-app browser interference.';
+          const detail = rawText || (response && response.statusText) || '';
+          if (errDiv) { errDiv.textContent = detail ? `${msg} — ${detail}` : msg; errDiv.classList.remove('hidden'); } else { alert(detail ? `${msg} — ${detail}` : msg); }
+          // Also attempt direct backend probe (diagnostic) but do not treat as success here
+          (async function(){ try { const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, ''); if (!API_BASE) return; const r = await fetch(API_BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData), cache: 'no-store' }); console.warn('Direct probe status', r.status); } catch(e){ console.warn('Direct probe failed', e); } })();
+          throw new Error('non-json-response');
+        }
+
         if (response.ok) {
+          // If the API follows the JSON pattern, ensure it signals success property
           const tokenVal = data && data.token ? data.token : '';
+          if (data && typeof data.success !== 'undefined' && !data.success) {
+            const errDiv = document.getElementById('signin-error');
+            const msg = (data && (data.message || data.error)) ? (data.message || data.error) : 'Sign-in failed';
+            if (errDiv) { errDiv.textContent = msg; errDiv.classList.remove('hidden'); } else { alert(msg); }
+            throw new Error('api-reported-failure');
+          }
           if (!tokenVal) {
             const msg = 'Login succeeded but server did not return a token.';
             console.warn(msg, data, rawText);
