@@ -265,14 +265,54 @@
             const msg = 'Login succeeded but server did not return a token.';
             console.warn(msg, data, rawText);
             const errDiv = document.getElementById('signin-error');
+            const detailText = rawText || (data ? JSON.stringify(data) : '');
             if (errDiv) {
-              errDiv.textContent = rawText ? `${msg} — ${rawText}` : msg;
+              errDiv.textContent = detailText ? `${msg} — ${detailText}` : msg;
               errDiv.classList.remove('hidden');
             } else {
-              alert(rawText ? `${msg} — ${rawText}` : msg);
+              alert(detailText ? `${msg} — ${detailText}` : msg);
             }
             try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
-            // Do not redirect — waiting for token from server
+
+            // Diagnostic: try a direct fetch to the explicit backend origin to bypass
+            // service workers or in-app browser proxies which may alter responses.
+            (async function tryDirectLogin() {
+              try {
+                const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
+                if (!API_BASE) return;
+                const directResp = await fetch(API_BASE + '/api/auth/login', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(formData), cache: 'no-store'
+                });
+                let directData = null;
+                let directText = null;
+                try { directData = await directResp.json(); } catch (e) { try { directText = await directResp.text(); } catch(_) { directText = String(directResp.status); } }
+                console.warn('Direct login attempt response:', directResp.status, directData || directText);
+                // If direct attempt yields a token, persist it and redirect
+                if (directData && directData.token) {
+                  try { localStorage.setItem('token', directData.token); } catch (e) {
+                    try {
+                      const cookieStr = 'token=' + encodeURIComponent(directData.token) + '; path=/; max-age=' + (7*24*60*60) + (location.protocol === 'https:' ? '; SameSite=None; Secure' : '');
+                      document.cookie = cookieStr;
+                    } catch (ee) { console.warn('Cookie set failed', ee); }
+                  }
+                  try { if (directData && directData.data) localStorage.setItem('user', JSON.stringify(directData.data)); } catch (e) {}
+                  window.location.href = '/';
+                  return;
+                }
+
+                // Show more details to the user so they can report it (useful for in-app browsers)
+                const directDetail = directData ? JSON.stringify(directData) : (directText || directResp.statusText || String(directResp.status));
+                if (errDiv) {
+                  errDiv.textContent = `${msg} (direct attempt): ${directDetail}`;
+                  errDiv.classList.remove('hidden');
+                } else {
+                  alert(`${msg} (direct attempt): ${directDetail}`);
+                }
+              } catch (e) {
+                console.warn('Direct login attempt failed', e && e.message ? e.message : e);
+              }
+            })();
           } else {
             console.debug('Received token from server (redacted):', typeof tokenVal === 'string' ? '[REDACTED]' : tokenVal);
             // Attempt to persist token in localStorage, fall back to cookie if storage is blocked
@@ -281,8 +321,8 @@
             } catch (err) {
               console.warn('localStorage.setItem failed — falling back to cookie', err && err.message ? err.message : err);
               try {
-                // set a conservative path so client scripts on the site can read it
-                document.cookie = 'token=' + encodeURIComponent(tokenVal) + '; path=/; max-age=' + (7 * 24 * 60 * 60);
+                const cookieStr = 'token=' + encodeURIComponent(tokenVal) + '; path=/; max-age=' + (7 * 24 * 60 * 60) + (location.protocol === 'https:' ? '; SameSite=None; Secure' : '');
+                document.cookie = cookieStr;
               } catch (e) {
                 console.warn('Cookie fallback failed', e && e.message ? e.message : e);
               }
