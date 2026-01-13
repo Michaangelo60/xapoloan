@@ -370,10 +370,14 @@
       if (appContainer) {
         const sidebarDiv = document.createElement('div');
         sidebarDiv.style.position = 'fixed';
-        sidebarDiv.style.left = '0';
+        // Anchor to the right-hand side of the viewport instead of the left
+        sidebarDiv.style.left = 'auto';
+        sidebarDiv.style.right = '0';
         sidebarDiv.style.bottom = '20px';
         sidebarDiv.style.width = '200px';
         sidebarDiv.style.padding = '12px';
+        // Make sure popup menus open inward (to the left) when anchored on the right
+        try { menu.style.right = '0'; menu.style.left = 'auto'; } catch (e) {}
         sidebarDiv.appendChild(supportWrap);
         sidebarDiv.appendChild(logoutButton);
         appContainer.appendChild(sidebarDiv);
