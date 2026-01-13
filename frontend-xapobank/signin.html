@@ -95,27 +95,38 @@
     }
 
     // tryFetch: attempt same-origin first, fall back to explicit backend URL
-    async function tryFetch(path, opts){
+    async function tryFetch(path, opts = {}){
       const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
-      const origin = location.origin.replace(/\/$/, '');
-      // Prefer an explicit API_BASE when provided (static site -> backend).
-      // Fall back to same-origin requests if API_BASE is not set or the
-      // primary attempt fails with a network error.
-      const candidates = [];
+      // Prefer same-origin (so service worker proxy is used) and fall back to explicit backend origin.
+      const candidates = [path];
       if (API_BASE) candidates.push(API_BASE + path);
-      // always try same-origin as a fallback
-      candidates.push(path);
+
+      // Ensure headers include Accept: application/json unless caller overrides
+      const defaultHeaders = { 'Accept': 'application/json' };
+      const headers = new Headers(defaultHeaders);
+      if (opts.headers) {
+        try {
+          const provided = new Headers(opts.headers);
+          for (const [k, v] of provided.entries()) headers.set(k, v);
+        } catch (e) {
+          // fallback for plain objects
+          try {
+            Object.entries(opts.headers).forEach(([k, v]) => headers.set(k, v));
+          } catch (_) {}
+        }
+      }
 
       let lastErr = null;
       for (const url of candidates) {
         try {
-          return await fetch(url, opts);
+          console.debug('tryFetch attempting', url);
+          const init = Object.assign({}, opts, { headers });
+          return await fetch(url, init);
         } catch (e) {
           lastErr = e;
           // try next candidate
         }
       }
-      // If no candidate succeeded, throw the last network error
       throw lastErr || new Error('fetch failed');
     }
     // Toggle password visibility
