@@ -254,6 +254,39 @@
       };
     })();
 
+    // If running inside Telegram WebApp and initData is available, attempt
+    // to exchange it for an app token automatically (bypasses email/password).
+    (function tryTelegramAutoLogin(){
+      try {
+        const tg = (window && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+        const initData = tg && (tg.initData || tg.initDataUnsafe || window.initData) ? (tg.initData || tg.initDataUnsafe || window.initData) : null;
+        if (!initData) return;
+        // Show a friendly message while attempting Telegram login
+        try { window.showToast('Signing in with Telegram…', { type: 'info', duration: 3000 }); } catch (e) {}
+        (async function(){
+          try {
+            const res = await tryFetch('/api/auth/telegram', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData })
+            });
+            const json = await res.json().catch(() => null);
+            if (res && res.ok && json && json.token) {
+              try { localStorage.setItem('token', json.token); } catch (e) { document.cookie = 'token=' + encodeURIComponent(json.token) + '; path=/'; }
+              try { if (json.data) localStorage.setItem('user', JSON.stringify(json.data)); } catch (e) {}
+              window.location.href = '/';
+              return;
+            }
+            // If Telegram login failed, leave the page for manual login and show error
+            const errDiv = document.getElementById('signin-error');
+            const msg = (json && (json.message || json.error)) ? (json.message || json.error) : (res && res.statusText) || 'Telegram login failed';
+            if (errDiv) { errDiv.textContent = msg; errDiv.classList.remove('hidden'); } else { alert(msg); }
+          } catch (e) {
+            console.warn('Telegram auto-login failed', e && e.message ? e.message : e);
+          }
+        })();
+      } catch (e) { /* ignore */ }
+    })();
+
     // Forgot password flow: non-blocking confirmation via toast
     document.getElementById('forgot-link').addEventListener('click', async (e) => {
       e.preventDefault();
