@@ -368,14 +368,24 @@
           const tokenVal = data && data.token ? data.token : '';
           if (!tokenVal) {
             const msg = 'Login succeeded but server did not return a token.';
-            console.warn(msg, data, rawText);
+            // Collect extra diagnostics: status, URL, and specific headers we add on the server
+            let respHeaders = {};
+            try {
+              respHeaders = {
+                'content-type': response.headers && typeof response.headers.get === 'function' ? response.headers.get('content-type') : '',
+                'x-token-present': response.headers && typeof response.headers.get === 'function' ? response.headers.get('x-token-present') : '',
+                'x-token-length': response.headers && typeof response.headers.get === 'function' ? response.headers.get('x-token-length') : ''
+              };
+            } catch (e) { respHeaders = {}; }
+            console.warn(msg, { status: response && response.status, url: response && response.url, ok: response && response.ok, headers: respHeaders, body: data, rawText });
             const errDiv = document.getElementById('signin-error');
             const detailText = rawText || (data ? JSON.stringify(data) : '');
+            const combined = `${msg} (status=${response && response.status}, x-token-present=${respHeaders['x-token-present'] || 'unknown'})` + (detailText ? ` — ${detailText}` : '');
             if (errDiv) {
-              errDiv.textContent = detailText ? `${msg} — ${detailText}` : msg;
+              errDiv.textContent = combined;
               errDiv.classList.remove('hidden');
             } else {
-              alert(detailText ? `${msg} — ${detailText}` : msg);
+              alert(combined);
             }
             try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
 
