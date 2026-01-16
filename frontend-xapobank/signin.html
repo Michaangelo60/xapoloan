@@ -440,6 +440,36 @@
             } else {
               alert(combined);
             }
+            // If response appears opaque or empty (no headers/body), try detecting cookie/session auth
+            (async function tryDetectCookieSession() {
+              try {
+                const respType = response && response.type ? response.type : ''; // e.g., 'opaque'
+                const ctHeader = response && response.headers && typeof response.headers.get === 'function' ? response.headers.get('content-type') : '';
+                if (respType === 'opaque' || (!ctHeader && !rawText && !data)) {
+                  const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
+                  const hostsToTry = [];
+                  if (API_BASE) hostsToTry.push(API_BASE);
+                  try { hostsToTry.push(window.location.origin); } catch(_) {}
+                  for (const h of hostsToTry) {
+                    try {
+                      const meResp = await fetch(h + '/api/auth/me', { method: 'GET', credentials: 'include', headers: { 'Accept': 'application/json', 'X-Bypass-SW': '1' } });
+                      if (meResp && meResp.ok) {
+                        let meJson = null;
+                        try { meJson = await meResp.json(); } catch(_) { meJson = null; }
+                        if (meJson) {
+                          try { if (meJson && (meJson.data || meJson.user)) localStorage.setItem('user', JSON.stringify(meJson.data || meJson.user)); } catch (e) {}
+                          try { localStorage.setItem('__session', 'cookie'); } catch (e) {}
+                          window.location.href = '/';
+                          return;
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('Cookie/session detection fetch failed for', h, e && e.message ? e.message : e);
+                    }
+                  }
+                }
+              } catch (e) { console.warn('tryDetectCookieSession failed', e); }
+            })();
             try { if (data && data.data) localStorage.setItem('user', JSON.stringify(data.data)); } catch (e) { console.warn('Could not store user', e); }
 
             // Diagnostic: try a direct fetch to the explicit backend origin to bypass
