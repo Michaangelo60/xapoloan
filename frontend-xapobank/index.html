@@ -62,7 +62,7 @@
     }
   </style>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://xa-poloan.onrender.com/config.js"></script>
+  <script src="https://xapoloan.onrender.com/config.js"></script>
   <script>
     // Fallback runtime config: if `config.js` failed to load,
     // ensure the app has an API base to call.
@@ -70,7 +70,7 @@
       try {
         if (!window.API_BASE && !window.API_URL) {
           // Prefer the known backend origin. Update if your backend host differs.
-          window.API_BASE = 'https://xa-poloan.onrender.com';
+          window.API_BASE = 'https://xapoloan.onrender.com';
           window.API_URL = window.API_BASE;
         }
       } catch (e) { /* ignore */ }
@@ -96,7 +96,7 @@
       navigator.serviceWorker.register('/sw.js').then(reg => {
         console.debug('Service worker registered', reg);
         const sendApiBase = (worker) => {
-          try { worker.postMessage({ type: 'setApiBase', value: window.API_BASE || window.API_URL || 'https://xa-poloan.onrender.com' }); } catch (e) {}
+          try { worker.postMessage({ type: 'setApiBase', value: window.API_BASE || window.API_URL || 'https://xapoloan.onrender.com' }); } catch (e) {}
         };
         if (reg.waiting) sendApiBase(reg.waiting);
         if (reg.active) sendApiBase(reg.active);
