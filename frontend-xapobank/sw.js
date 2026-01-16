@@ -22,6 +22,14 @@ self.addEventListener('fetch', (event) => {
     // Only proxy requests aimed at the static origin's /api/ path
     if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
       event.respondWith((async () => {
+        try {
+          // If the page explicitly asks to bypass the SW for this request,
+          // forward it directly to network to avoid proxying/mangling.
+          const bypass = req.headers && typeof req.headers.get === 'function' ? req.headers.get('x-bypass-sw') : null;
+          if (bypass) {
+            return fetch(req);
+          }
+        } catch (e) { /* ignore and continue to proxy */ }
         const target = self.apiBase + url.pathname + url.search;
         const init = {
           method: req.method,
