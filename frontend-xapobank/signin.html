@@ -186,20 +186,26 @@
       }
       throw lastErr || new Error('fetch failed');
     }
-    // Toggle password visibility
-    const toggleBtn = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('password');
-    toggleBtn.addEventListener('click', () => {
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleBtn.textContent = 'Hide';
-        toggleBtn.setAttribute('aria-pressed', 'true');
-      } else {
-        passwordInput.type = 'password';
-        toggleBtn.textContent = 'Show';
-        toggleBtn.setAttribute('aria-pressed', 'false');
+    // Toggle password visibility (guard elements exist)
+    (function(){
+      const toggleBtn = document.getElementById('toggle-password');
+      const passwordInput = document.getElementById('password');
+      if (!toggleBtn || !passwordInput) {
+        console.warn('Password toggle elements not found; skipping listener');
+        return;
       }
-    });
+      toggleBtn.addEventListener('click', () => {
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          toggleBtn.textContent = 'Hide';
+          toggleBtn.setAttribute('aria-pressed', 'true');
+        } else {
+          passwordInput.type = 'password';
+          toggleBtn.textContent = 'Show';
+          toggleBtn.setAttribute('aria-pressed', 'false');
+        }
+      });
+    })();
 
     // Lightweight non-blocking toast UI
     (function(){
@@ -355,6 +361,13 @@
             method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
             body: JSON.stringify(formData),
           });
+        }
+        if (!response) {
+          const errDiv = document.getElementById('signin-error');
+          const msg = 'Login request failed — no response from server (network/CORS/proxy issue).';
+          console.warn(msg);
+          if (errDiv) { errDiv.textContent = msg; errDiv.classList.remove('hidden'); }
+          throw new Error(msg);
         }
         try {
           const ct = (response && response.headers && typeof response.headers.get === 'function') ? response.headers.get('content-type') : '';
