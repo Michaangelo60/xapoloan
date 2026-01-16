@@ -90,7 +90,7 @@
         console.debug('Service worker registered', reg);
         // Send API base to the worker when active
         const sendApiBase = (worker) => {
-          try { worker.postMessage({ type: 'setApiBase', value: window.API_BASE || window.API_URL || 'https://xa-poloan.onrender.com' }); } catch (e) {}
+                try { worker.postMessage({ type: 'setApiBase', value: window.API_BASE || window.API_URL || 'https://xapoloan.onrender.com' }); } catch (e) {}
         };
         if (reg.installing) reg.installing.addEventListener('statechange', () => {});
         if (reg.waiting) sendApiBase(reg.waiting);
