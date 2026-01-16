@@ -266,7 +266,7 @@
         (async function(){
           try {
             const res = await tryFetch('/api/auth/telegram', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
               body: JSON.stringify({ initData })
             });
             const json = await res.json().catch(() => null);
@@ -335,7 +335,7 @@
       try {
         const response = await tryFetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
           body: JSON.stringify(formData),
         });
         try {
