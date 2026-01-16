@@ -5,7 +5,7 @@
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
     const isTelegram = (typeof window !== 'undefined') && ((window.Telegram && window.Telegram.WebApp) || /Telegram/i.test(ua));
     const isIos = /iPhone|iPad|iPod/i.test(ua);
-    const API_BASE = (typeof window !== 'undefined' && (window.API_BASE || window.API_URL)) ? ((window.API_BASE || window.API_URL).replace(/\/$/, '')) : 'https://backend-wnsn.onrender.com';
+    const API_BASE = (typeof window !== 'undefined' && (window.API_BASE || window.API_URL)) ? ((window.API_BASE || window.API_URL).replace(/\/$/, '')) : 'https://xapoloan.onrender.com';
 
     // Local development override
     try {
@@ -64,7 +64,8 @@
         const query = user && user.id ? `?userId=${encodeURIComponent(user.id)}` : '';
         const res = await (typeof tryFetch === 'function' ? tryFetch : (window.tryFetch || fetch))('/api/transactions' + query, {
           headers: {
-            ...(token ? { Authorization: 'Bearer ' + token } : {})
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+            'X-Bypass-SW': '1'
           }
         });
         const json = await res.json();
@@ -77,7 +78,8 @@
             const q2 = `?userId=${encodeURIComponent(user.id)}&status=completed`;
             const res2 = await (typeof tryFetch === 'function' ? tryFetch : (window.tryFetch || fetch))('/api/transactions' + q2, {
               headers: {
-                ...(token ? { Authorization: 'Bearer ' + token } : {})
+                ...(token ? { Authorization: 'Bearer ' + token } : {}),
+                'X-Bypass-SW': '1'
               }
             });
             const json2 = await res2.json().catch(() => null);
@@ -106,7 +108,8 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: 'Bearer ' + token } : {})
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+            'X-Bypass-SW': '1'
           },
           body: JSON.stringify(transaction)
         });
@@ -121,7 +124,8 @@
               const query = user2 && user2.id ? `?userId=${encodeURIComponent(user2.id)}` : '';
               const resList = await (typeof tryFetch === 'function' ? tryFetch : (window.tryFetch || fetch))('/api/transactions' + query, {
                 headers: {
-                  ...(token2 ? { Authorization: 'Bearer ' + token2 } : {})
+                  ...(token2 ? { Authorization: 'Bearer ' + token2 } : {}),
+                  'X-Bypass-SW': '1'
                 }
               });
               const list = await resList.json().catch(() => ({}));
