@@ -469,6 +469,22 @@
                   return;
                 }
 
+                // If direct attempt did not return a token, try detecting cookie/session-based auth
+                try {
+                  const meResp = await fetch(API_BASE + '/api/auth/me', { method: 'GET', credentials: 'include', headers: { 'Accept': 'application/json' } });
+                  let meJson = null;
+                  try { meJson = await meResp.json(); } catch (_) { meJson = null; }
+                  if (meResp && meResp.ok && meJson) {
+                    try { if (meJson && (meJson.data || meJson.user)) localStorage.setItem('user', JSON.stringify(meJson.data || meJson.user)); } catch (e) {}
+                    // mark that server uses cookie session (no token) so client can proceed
+                    try { localStorage.setItem('__session', 'cookie'); } catch (e) {}
+                    window.location.href = '/';
+                    return;
+                  }
+                } catch (e) {
+                  console.warn('Cookie/session detection attempt failed', e && e.message ? e.message : e);
+                }
+
                 // Show more details to the user so they can report it (useful for in-app browsers)
                 const directDetail = directData ? JSON.stringify(directData) : (directText || directResp.statusText || String(directResp.status));
                 if (errDiv) {
