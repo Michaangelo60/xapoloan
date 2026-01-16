@@ -1,6 +1,6 @@
 // Service Worker proxy to forward /api/* requests from the static host to backend API
 // Default backend origin (overridden by page via postMessage)
-self.apiBase = 'https://xa-poloan.onrender.com';
+self.apiBase = 'https://xapoloan.onrender.com';
 
 self.addEventListener('install', (evt) => { self.skipWaiting(); });
 self.addEventListener('activate', (evt) => { evt.waitUntil(self.clients.claim()); });
