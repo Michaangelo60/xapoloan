@@ -9,7 +9,7 @@
   <link rel="icon" href="/xapo_logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/xapo_logo.svg">
   <script src="https://cdn.tailwindcss.com"></script>
-
+  
   <style>
     /* Minor overrides for better touch targets on small devices */
     input[type="email"], input[type="password"] { font-size: 1rem; }
@@ -333,11 +333,29 @@
       };
 
       try {
-        const response = await tryFetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
-          body: JSON.stringify(formData),
-        });
+        // Prefer direct request to explicit backend origin when available to avoid
+        // service-worker or in-app proxies altering the response body.
+        const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
+        let response;
+        if (API_BASE) {
+          try {
+            response = await fetch(API_BASE + '/api/auth/login', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
+              body: JSON.stringify(formData), cache: 'no-store', mode: 'cors'
+            });
+          } catch (e) {
+            // direct fetch failed; fall back to tryFetch
+            response = await tryFetch('/api/auth/login', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
+              body: JSON.stringify(formData),
+            });
+          }
+        } else {
+          response = await tryFetch('/api/auth/login', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
+            body: JSON.stringify(formData),
+          });
+        }
         try {
           const ct = (response && response.headers && typeof response.headers.get === 'function') ? response.headers.get('content-type') : '';
           console.debug('Login response url/content-type', response && response.url, ct);
@@ -468,4 +486,3 @@
   </script>
 </body>
 </html>
-
