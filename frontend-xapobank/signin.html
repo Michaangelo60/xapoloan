@@ -187,7 +187,20 @@
         try {
           console.debug('tryFetch ->', url);
           const init = Object.assign({}, opts, { headers: defaultHeaders });
-          return await fetch(url, init);
+          const resp = await fetch(url, init);
+          // If response looks like HTML (static site) rather than JSON, try the explicit API_BASE
+          try {
+            const ct = resp && resp.headers && typeof resp.headers.get === 'function' ? (resp.headers.get('content-type') || '') : '';
+            const isHtml = ct && /html/i.test(ct);
+            // If we got HTML and we have an API_BASE candidate later, skip this response and try next
+            if (isHtml) {
+              console.warn('tryFetch: received HTML response, likely static host; will try next candidate', { url, contentType: ct });
+              lastErr = new Error('received HTML response');
+              // continue to next candidate (do not return this response)
+              continue;
+            }
+          } catch (e) { /* ignore header parse errors and fall back to returning the response */ }
+          return resp;
         } catch (e) {
           lastErr = e;
         }
