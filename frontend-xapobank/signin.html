@@ -84,6 +84,14 @@
   </main>
 
   <script>
+    // Development helper: when loaded from localhost, point API_BASE to local backend
+    try {
+      if ((!window.API_BASE || window.API_BASE === '') && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+        window.API_BASE = location.protocol + '//' + location.hostname + ':' + (window.BACKEND_PORT || '10000');
+        console.debug('DEV: setting window.API_BASE to', window.API_BASE);
+      }
+    } catch (e) { /* ignore */ }
+
     // Register service worker to proxy /api/* from static site to backend.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(reg => {
@@ -339,29 +347,11 @@
       };
 
       try {
-        // Prefer direct request to explicit backend origin when available to avoid
-        // service-worker or in-app proxies altering the response body.
-        const API_BASE = (window.API_BASE || window.API_URL || '').replace(/\/$/, '');
-        let response;
-        if (API_BASE) {
-          try {
-            response = await fetch(API_BASE + '/api/auth/login', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
-              body: JSON.stringify(formData), cache: 'no-store', mode: 'cors'
-            });
-          } catch (e) {
-            // direct fetch failed; fall back to tryFetch
-            response = await tryFetch('/api/auth/login', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
-              body: JSON.stringify(formData),
-            });
-          }
-        } else {
-          response = await tryFetch('/api/auth/login', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bypass-SW': '1' },
-            body: JSON.stringify(formData),
-          });
-        }
+        // Use tryFetch to handle proxying via service worker if needed
+        const response = await tryFetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
         if (!response) {
           const errDiv = document.getElementById('signin-error');
           const msg = 'Login request failed — no response from server (network/CORS/proxy issue).';
